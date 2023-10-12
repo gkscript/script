@@ -1,0 +1,2 @@
+src/*.appxbundle filter=lfs diff=lfs merge=lfs -text
+src/Microsoft.DesktopAppInstaller.msixbundle filter=lfs diff=lfs merge=lfs -text
