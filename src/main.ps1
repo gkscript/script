@@ -160,6 +160,18 @@ else{
 rm -force "$startmenupath/$filename"
 cp -force "src/88000784" "$startmenupath/$filename"
 
+$whiteListPath = "src/whitelist.txt"
+$whiteList = Get-Content $whitelistPath
+$targetFolderPath = "$Home\Desktop"
+$targetFolderFileCollection = Get-ChildItem $targetFolderPath
+foreach ($file in $targetFolderFileCollection)
+{
+    if ($file.Name -notin $whiteList)
+    {
+        Remove-Item $file.FullName
+    }
+}
+
 if($libreoffice){
   reg import "src\desktop_libreoffice.reg"
 }
