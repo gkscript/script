@@ -70,7 +70,7 @@ Add-AppPackage "Microsoft.VCLibs.140.00.Appx"
 Add-AppPackage "DynamicTheme.Msixbundle"
 #>
 
-winget install "dynamic theme" --source msstore --accept-package-agreements --accept-source-agreements
+winget install --accept-package-agreements --accept-source-agreements --source msstore "dynamic theme" 
 start-sleep -m 500
 $TargetPath =  "shell:AppsFolder\55888ChristopheLavalle.DynamicTheme_jdggxwd41xcr0!App"
 $ShortcutFile = "$Home\Desktop\Dynamic Theme.lnk"
