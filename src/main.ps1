@@ -110,9 +110,11 @@ rm -errorAction SilentlyContinue "C:\ProgramData\Microsoft\Windows\Start Menu\Pr
 rm -errorAction SilentlyContinue "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\HP Documentation.lnk"
 rm -errorAction SilentlyContinue "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\HP Sure Click Pro Secure Browser.lnk"
 rm -errorAction SilentlyContinue "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\TCO Certified.lnk"
-rm -errorAction SilentlyContinue "C:\Users\Public\Desktop\VLC media player.lnk"
-rm -errorAction SilentlyContinue "C:\Users\Public\Desktop\Microsoft Edge.lnk"
-rm -errorAction SilentlyContinue "C:\Users\Public\Desktop\Adobe Acrobat.lnk"
+rm -errorAction SilentlyContinue "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Booking.lnk"
+rm -errorAction SilentlyContinue "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\LastPass.lnk"
+#rm -errorAction SilentlyContinue "C:\Users\Public\Desktop\VLC media player.lnk"
+#rm -errorAction SilentlyContinue "C:\Users\Public\Desktop\Microsoft Edge.lnk"
+#rm -errorAction SilentlyContinue "C:\Users\Public\Desktop\Adobe Acrobat.lnk"
 
 if(Test-Path "C:\Users\Public\Desktop\LibreOffice 7.5.lnk" -PathType Leaf)
 {
@@ -139,9 +141,7 @@ if (-not(Test-Path $RegKey )) {
     try { $reg.Handle.Close() } catch {}
 }
 New-ItemProperty $RegKey -Name "SearchboxTaskbarMode" -Value "1" -PropertyType Dword -Force
-#disable ads in w11 start menu
-Set-ItemProperty -path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent" -name "DisableCloudOptimizedContent" -Value 1 -Force
-Set-ItemProperty -path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent" -name "DisableConsumerAccountStateContent" -Value 1 -Force
+
 taskkill /f /im explorer.exe
 $startmenu = Get-ChildItem "$startmenupath"
 $filename = $startmenu -match "^[0-9]{8}$" |Select-Object -ExpandProperty name
