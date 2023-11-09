@@ -172,7 +172,7 @@ Function Protect-Privacy {
 }
 
 function uninstallfun{
-    winget uninstall "HP Connection Optimizer" --accept-package-agreements --accept-source-agreements
+    winget uninstall "HP Connection Optimizer" --accept-source-agreements
     winget uninstall "Microsoft Teams"
     winget uninstall "Microsoft news"
     winget uninstall "Microsoft Family"
@@ -199,6 +199,11 @@ function uninstallfun{
     winget uninstall "Ihr Smartphone"
     winget uninstall "Mail und Kalender"
     winget uninstall "myHP"
+    winget uninstall "Alexa"
+    winget uninstall "HP Quickdrop"
+    winget uninstall "HP Smart"
+    winget uninstall "HP System Event Utility"
+    winget uninstall "Dropbox-Sonderaktion"
     winget uninstall "skype"
     winget uninstall "Nachrichten"
     winget uninstall "Microsoft Whiteboard"
@@ -229,4 +234,8 @@ uninstallfun
 Remove-Keys
 #Start-Sleep 1
 Protect-Privacy
+$null = winget list -q "gmail"
+if ($?){
 chrome
+}
+
