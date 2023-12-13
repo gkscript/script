@@ -13,7 +13,7 @@ if (-not (test-connection 8.8.8.8 -quiet)){
   exit 1
 }
 
-
+# install winget
 if(-not (Get-Command "winget" -errorAction SilentlyContinue)){
   Add-AppPackage "src/UI.Xaml.2.7_7.2208.15002.0.Appx"
   Add-AppPackage "src/VCLibs.140.00.UWPDesktop_14.0.32530.0_x64.Appx"
@@ -25,11 +25,13 @@ if(-not (Get-Command "winget" -errorAction SilentlyContinue)){
   $null=[System.Windows.Forms.Messagebox]::Show("Failure to install Winget. Please update the `"App-Installer`" package from the Microsoft Store manually")
   exit 1
 }
+# install chocolatey
 if(-not (Get-Command "choco" -errorAction SilentlyContinue)){
   [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
 }
 src/RefreshEnv.cmd
-if(Get-Command "choco" -errorAction SilentlyContinue){
+# install programs
+if(Get-Command "choco" -errorAction SilentlyContinue){     
   choco feature enable -n allowGlobalConfirmation
   switch($type)
         {
@@ -42,7 +44,8 @@ if(Get-Command "choco" -errorAction SilentlyContinue){
                 exit 1
             }
         }
-        if (-not ($?)){                #if installation failed, try one more time
+        # if installation failed, try one more time
+        if (-not ($?)){
           switch($type)
         {
             0{choco install -y --ignorechecksum vlc firefox googlechrome 7zip adobereader}              #business
@@ -70,6 +73,7 @@ Add-AppPackage "Microsoft.VCLibs.140.00.Appx"
 Add-AppPackage "DynamicTheme.Msixbundle"
 #>
 
+# install dynamic theme
 winget install --accept-package-agreements --accept-source-agreements --source msstore "dynamic theme" 
 start-sleep -m 500
 $TargetPath =  "shell:AppsFolder\55888ChristopheLavalle.DynamicTheme_jdggxwd41xcr0!App"
@@ -79,18 +83,18 @@ $Shortcut = $WScriptShell.CreateShortcut($ShortcutFile)
 $Shortcut.TargetPath = $TargetPath
 $Shortcut.Save()
 
-
+# install geforce experience
 if ($gpu -like "*Nvidia*"){
   $null=[System.Windows.Forms.Messagebox]::Show("Nvidia GPU detected, installing Geforce Experience")
   choco install -y --ignorechecksum geforce-experience geforce-game-ready-driver
 }
-
+# disable bitlocker
 $blinfo = Get-Bitlockervolume
 if($blinfo.EncryptionPercentage -eq '100' -and $blinfo.MountPoint -eq 'C:'){
     $null=[System.Windows.Forms.Messagebox]::Show("Bitlocker is enabled! Disabling..")
     Disable-BitLocker -MountPoint "C:"
 }
-
+# copy files to C:\Install
 if (-not (Test-Path -Path 'C:\Install' -PathType Container -errorAction SilentlyContinue)) {
     mkdir "C:\Install"
 }
@@ -103,7 +107,7 @@ if($type -eq 1 -or 3)
     cp "src/readerdc_it_xa_crd_install.exe" "C:\Install"
     start-process -FilePath "C:\Install\readerdc_it_xa_crd_install.exe" -ArgumentList "--silent"
 }
-
+# remove ads on desktop
 rm -errorAction SilentlyContinue "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Angebote.lnk"
 rm -errorAction SilentlyContinue "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Firefox Privater Modus.lnk"
 rm -errorAction SilentlyContinue "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Amazon.com.lnk"
@@ -116,6 +120,7 @@ rm -errorAction SilentlyContinue "C:\ProgramData\Microsoft\Windows\Start Menu\Pr
 #rm -errorAction SilentlyContinue "C:\Users\Public\Desktop\Microsoft Edge.lnk"
 #rm -errorAction SilentlyContinue "C:\Users\Public\Desktop\Adobe Acrobat.lnk"
 
+# add libreoffice shortcuts to desktop
 if(Test-Path "C:\Users\Public\Desktop\LibreOffice 7.5.lnk" -PathType Leaf)
 {
     $libreoffice = 1
@@ -125,16 +130,16 @@ if(Test-Path "C:\Users\Public\Desktop\LibreOffice 7.5.lnk" -PathType Leaf)
     cp "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\LibreOffice 7.5\LibreOffice Impress.lnk" "C:\Users\Public\Desktop"
 }
 
-
+# registry tweaks
 reg import "src/Logo_Info.reg"
 reg import "src/icons.reg"
 Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize" -Name "SystemUsesLightTheme" -Value 0
 Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize" -Name "AppsUseLightTheme" -Value 1
-#remove widgets from taskbar
+# remove widgets from taskbar
 reg add "HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /f /v TaskbarDa /t REG_DWORD /d 0
-#remove chat from taskbar
+# remove chat from taskbar
 reg add "HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /f /v TaskbarMn /t REG_DWORD /d 0
-#change to small search bar
+# change to small search bar
 $RegKey = "registry::HKEY_USERS\$((whoami /user /fo csv | convertfrom-csv).sid)\Software\Microsoft\Windows\CurrentVersion\Search"
 if (-not(Test-Path $RegKey )) {
     $reg = New-Item $RegKey -Force | Out-Null
@@ -142,6 +147,7 @@ if (-not(Test-Path $RegKey )) {
 }
 New-ItemProperty $RegKey -Name "SearchboxTaskbarMode" -Value "1" -PropertyType Dword -Force
 
+# apply custom pinned start apps
 taskkill /f /im explorer.exe
 $startmenu = Get-ChildItem "$startmenupath"
 $filename = $startmenu -match "^[0-9]{8}$" |Select-Object -ExpandProperty name
@@ -154,12 +160,13 @@ else{
   rm -force "$startmenupath/start.bin"
   cp -force "src/start2.bin" "$startmenupath/start.bin"
 }
-#
+
 #rm -force "$env:LOCALAPPDATA/Packages/Microsoft.Windows.StartMenuExperienceHost_cw5n1h2txyewy/LocalState/88000784"
 #cp -force "src/start2.bin" "$env:LOCALAPPDATA/Packages/Microsoft.Windows.StartMenuExperienceHost_cw5n1h2txyewy/LocalState/"
 rm -force "$startmenupath/$filename"
 cp -force "src/88000784" "$startmenupath/$filename"
 
+# remove unwanted apps from desktop
 $whiteListPath = "src/whitelist.txt"
 $whiteList = Get-Content $whitelistPath
 $targetFolderPath = "$Home\Desktop"
@@ -171,7 +178,7 @@ foreach ($file in $targetFolderFileCollection)
         Remove-Item $file.FullName
     }
 }
-
+# apply custom desktop icon layout
 if($libreoffice){
   reg import "src\desktop_libreoffice.reg"
 }
@@ -186,7 +193,7 @@ W32tm /resync /force
 echo "Uninstalling Office..."
 src\officesetup.exe /configure "src\office.xml"
 src/debloat.ps1
-#Danke an Joachim
+# set default apps, thanks Joachim
 src/SetUserFTA.exe "src/assoc.txt"
 #ii "C:/Install"
 #src\ascii.exe "src\netixx_black.jpg -C -c"
