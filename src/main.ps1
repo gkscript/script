@@ -90,7 +90,7 @@ if ($gpu -like "*Nvidia*"){
 }
 # disable bitlocker
 $blinfo = Get-Bitlockervolume
-if($blinfo.EncryptionPercentage -eq '100' -and $blinfo.MountPoint -eq 'C:'){
+if($blinfo.EncryptionPercentage -ne '0' -and $blinfo.MountPoint -eq 'C:'){
     $null=[System.Windows.Forms.Messagebox]::Show("Bitlocker is enabled! Disabling..")
     Disable-BitLocker -MountPoint "C:"
 }
