@@ -5,6 +5,7 @@ $type = $args[1]
 cd "$dir"
 
 $gpu = (Get-WmiObject Win32_VideoController).Name
+$W11 = (Get-WmiObject Win32_OperatingSystem).Caption -Match "Windows 11"
 
 $startmenupath = "$env:LOCALAPPDATA/Packages/Microsoft.Windows.StartMenuExperienceHost_cw5n1h2txyewy/LocalState"
 
@@ -121,13 +122,14 @@ rm -errorAction SilentlyContinue "C:\ProgramData\Microsoft\Windows\Start Menu\Pr
 #rm -errorAction SilentlyContinue "C:\Users\Public\Desktop\Adobe Acrobat.lnk"
 
 # add libreoffice shortcuts to desktop
-if(Test-Path "C:\Users\Public\Desktop\LibreOffice 7.5.lnk" -PathType Leaf)
+if ($type -eq 2 -or 3)
 {
     $libreoffice = 1
-    rm "C:\Users\Public\Desktop\LibreOffice 7.5.lnk"
-    cp "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\LibreOffice 7.5\LibreOffice Calc.lnk" "C:\Users\Public\Desktop"
-    cp "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\LibreOffice 7.5\LibreOffice Writer.lnk" "C:\Users\Public\Desktop"
-    cp "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\LibreOffice 7.5\LibreOffice Impress.lnk" "C:\Users\Public\Desktop"
+    $libreofficepath = Get-ChildItem -Path "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\" -Filter "LibreOffice*" -Directory -Recurse | Select-Object -ExpandProperty FullName
+    rm "C:\Users\Public\Desktop\LibreOffice*.lnk"
+    cp "$libreofficepath\LibreOffice Calc.lnk" "C:\Users\Public\Desktop"
+    cp "$libreofficepath\LibreOffice Writer.lnk" "C:\Users\Public\Desktop"
+    cp "$libreofficepath\LibreOffice Impress.lnk" "C:\Users\Public\Desktop"
 }
 
 # registry tweaks
@@ -147,25 +149,26 @@ if (-not(Test-Path $RegKey )) {
 }
 New-ItemProperty $RegKey -Name "SearchboxTaskbarMode" -Value "1" -PropertyType Dword -Force
 
-# apply custom pinned start apps
+# apply custom pinned start apps on Windows 11
 taskkill /f /im explorer.exe
-$startmenu = Get-ChildItem "$startmenupath"
-$filename = $startmenu -match "^[0-9]{8}$" |Select-Object -ExpandProperty name
-if (Test-Path -Path "$startmenupath/start2.bin" -PathType Leaf -errorAction SilentlyContinue)
-{
-  rm -force "$startmenupath/start2.bin"
-  cp -force "src/start2.bin" "$startmenupath"
-}
-else{
-  rm -force "$startmenupath/start.bin"
-  cp -force "src/start2.bin" "$startmenupath/start.bin"
-}
+if($W11){
+  $startmenu = Get-ChildItem "$startmenupath"
+  $filename = $startmenu -match "^[0-9]{8}$" |Select-Object -ExpandProperty name
+  if (Test-Path -Path "$startmenupath/start2.bin" -PathType Leaf -errorAction SilentlyContinue)
+  {
+    rm -force "$startmenupath/start2.bin"
+    cp -force "src/start2.bin" "$startmenupath"
+  }
+  else{
+    rm -force "$startmenupath/start.bin"
+    cp -force "src/start2.bin" "$startmenupath/start.bin"
+  }
 
-#rm -force "$env:LOCALAPPDATA/Packages/Microsoft.Windows.StartMenuExperienceHost_cw5n1h2txyewy/LocalState/88000784"
-#cp -force "src/start2.bin" "$env:LOCALAPPDATA/Packages/Microsoft.Windows.StartMenuExperienceHost_cw5n1h2txyewy/LocalState/"
-rm -force "$startmenupath/$filename"
-cp -force "src/88000784" "$startmenupath/$filename"
-
+  #rm -force "$env:LOCALAPPDATA/Packages/Microsoft.Windows.StartMenuExperienceHost_cw5n1h2txyewy/LocalState/88000784"
+  #cp -force "src/start2.bin" "$env:LOCALAPPDATA/Packages/Microsoft.Windows.StartMenuExperienceHost_cw5n1h2txyewy/LocalState/"
+  rm -force "$startmenupath/$filename"
+  cp -force "src/88000784" "$startmenupath/$filename"
+}
 # remove unwanted apps from desktop
 $whiteListPath = "src/whitelist.txt"
 $whiteList = Get-Content $whitelistPath
