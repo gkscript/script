@@ -38,8 +38,8 @@ if(Get-Command "choco" -errorAction SilentlyContinue){
         {
             0{choco install -y --ignorechecksum vlc firefox googlechrome 7zip adobereader}              #business
             1{choco install -y --ignorechecksum vlc firefox googlechrome 7zip}                          #business_it
-            2{choco install -y --ignorechecksum vlc firefox googlechrome 7zip adobereader libreoffice}  #consumer
-            3{choco install -y --ignorechecksum vlc firefox googlechrome 7zip libreoffice}              #consumer_it
+            2{choco install -y --ignorechecksum vlc firefox googlechrome 7zip adobereader libreoffice paint.net}  #consumer
+            3{choco install -y --ignorechecksum vlc firefox googlechrome 7zip libreoffice paint.net}              #consumer_it
             default{
                 write-host "Option not recognized! Stopping..."
                 exit 1
@@ -51,8 +51,8 @@ if(Get-Command "choco" -errorAction SilentlyContinue){
         {
             0{choco install -y --ignorechecksum vlc firefox googlechrome 7zip adobereader}              #business
             1{choco install -y --ignorechecksum vlc firefox googlechrome 7zip}                          #business_it
-            2{choco install -y --ignorechecksum vlc firefox googlechrome 7zip adobereader libreoffice}  #consumer
-            3{choco install -y --ignorechecksum vlc firefox googlechrome 7zip libreoffice}              #consumer_it
+            2{choco install -y --ignorechecksum vlc firefox googlechrome 7zip adobereader libreoffice paint.net}  #consumer
+            3{choco install -y --ignorechecksum vlc firefox googlechrome 7zip libreoffice paint.net}              #consumer_it
             default{
                 write-host "Option not recognized! Stopping..."
                 exit 1
@@ -186,7 +186,7 @@ if($libreoffice){
   reg import "src\desktop_libreoffice.reg"
 }
 else{
-reg import "src/desktop.reg"
+  reg import "src/desktop.reg"
 }
 sleep 2
 explorer.exe
