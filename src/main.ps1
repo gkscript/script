@@ -36,8 +36,8 @@ if(Get-Command "choco" -errorAction SilentlyContinue){
   choco feature enable -n allowGlobalConfirmation
   switch($type)
         {
-            0{choco install -y --ignorechecksum vlc firefox googlechrome 7zip adobereader}              #business
-            1{choco install -y --ignorechecksum vlc firefox googlechrome 7zip}                          #business_it
+            0{choco install -y --ignorechecksum vlc firefox googlechrome 7zip adobereader}                        #business
+            1{choco install -y --ignorechecksum vlc firefox googlechrome 7zip}                                    #business_it
             2{choco install -y --ignorechecksum vlc firefox googlechrome 7zip adobereader libreoffice paint.net}  #consumer
             3{choco install -y --ignorechecksum vlc firefox googlechrome 7zip libreoffice paint.net}              #consumer_it
             default{
@@ -49,8 +49,8 @@ if(Get-Command "choco" -errorAction SilentlyContinue){
         if (-not ($?)){
           switch($type)
         {
-            0{choco install -y --ignorechecksum vlc firefox googlechrome 7zip adobereader}              #business
-            1{choco install -y --ignorechecksum vlc firefox googlechrome 7zip}                          #business_it
+            0{choco install -y --ignorechecksum vlc firefox googlechrome 7zip adobereader}                        #business
+            1{choco install -y --ignorechecksum vlc firefox googlechrome 7zip}                                    #business_it
             2{choco install -y --ignorechecksum vlc firefox googlechrome 7zip adobereader libreoffice paint.net}  #consumer
             3{choco install -y --ignorechecksum vlc firefox googlechrome 7zip libreoffice paint.net}              #consumer_it
             default{
@@ -86,7 +86,7 @@ $Shortcut.Save()
 
 # install geforce experience
 if ($gpu -like "*Nvidia*"){
-  $null=[System.Windows.Forms.Messagebox]::Show("Nvidia GPU detected, installing Geforce Experience")
+  $null=[System.Windows.Forms.Messagebox]::Show("Nvidia GPU detected, installing Driver and Geforce Experience")
   choco install -y --ignorechecksum geforce-experience geforce-game-ready-driver
 }
 # disable bitlocker
