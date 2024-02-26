@@ -6,6 +6,8 @@ cd "$dir"
 
 $gpu = (Get-WmiObject Win32_VideoController).Name
 $W11 = (Get-WmiObject Win32_OperatingSystem).Caption -Match "Windows 11"
+$nvidia = 0
+$bitlocker = 0
 
 $startmenupath = "$env:LOCALAPPDATA/Packages/Microsoft.Windows.StartMenuExperienceHost_cw5n1h2txyewy/LocalState"
 
@@ -86,13 +88,13 @@ $Shortcut.Save()
 
 # install geforce experience
 if ($gpu -like "*Nvidia*"){
-  $null=[System.Windows.Forms.Messagebox]::Show("Nvidia GPU detected, installing Driver and Geforce Experience")
+  $nvidia = 1
   choco install -y --ignorechecksum geforce-experience geforce-game-ready-driver
 }
 # disable bitlocker
 $blinfo = Get-Bitlockervolume
 if($blinfo.EncryptionPercentage -ne '0' -and $blinfo.MountPoint -eq 'C:'){
-    $null=[System.Windows.Forms.Messagebox]::Show("Bitlocker is enabled! Disabling..")
+    $bitlocker = 1
     Disable-BitLocker -MountPoint "C:"
 }
 # copy files to C:\Install
@@ -201,4 +203,10 @@ src/SetUserFTA.exe "src/assoc.txt"
 #ii "C:/Install"
 #src\ascii.exe "src\netixx_black.jpg -C -c"
 Write-Host "`nGrundkonfiguration abgeschlossen"
+if($nvidia){
+  Write-Host "`n- Nvidia Grafiktreiber installiert"
+}
+if($bitlocker){
+  Write-Host "`n- Bitlocker deaktiviert"
+}
 $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
