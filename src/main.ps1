@@ -94,7 +94,7 @@ $Shortcut.TargetPath = $TargetPath
 $Shortcut.Save()
 
 # install geforce experience
-if ($gpu -like "*Nvidia*"){
+if ($gpu -like "*Nvidia*" -or "*NVIDIA*"){
   $nvidia = 1
   choco install -y --ignorechecksum geforce-experience geforce-game-ready-driver
 }
