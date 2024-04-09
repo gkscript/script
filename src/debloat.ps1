@@ -172,46 +172,11 @@ Function Protect-Privacy {
 }
 
 function uninstallfun{
-    winget uninstall "HP Connection Optimizer" --accept-source-agreements
-    winget uninstall "Microsoft Teams"
-    winget uninstall "Microsoft news"
-    winget uninstall "Microsoft Family"
-    winget uninstall "Microsoft To Do"
-    winget uninstall "Clipchamp"
-    winget uninstall "MSN Wetter"
-    winget uninstall "Microsoft-Tipps"
-    winget uninstall "Solitaire & Casual Games"
-    winget uninstall "Microsoft Solitaire Collection"
-    winget uninstall "Windows-Karten"
-    winget uninstall "paint 3d"
-    winget uninstall "Spotify Music"
-    winget uninstall "Spotify"
-    winget uninstall "Feedback-Hub"
-    winget uninstall "Microsoft Kontakte"
-    winget uninstall "Remotehilfe"
-    winget uninstall "Windows-PC-Integritätsprüfung"
-    winget uninstall "Hilfe anfordern"
-    winget uninstall "office"
-    winget uninstall "WebAdvisor von McAfee"
-    winget uninstall "Xbox"
-    winget uninstall "HP Documentation"
-    winget uninstall "Power Automate"
-    winget uninstall "Ihr Smartphone"
-    winget uninstall "Mail und Kalender"
-    winget uninstall "myHP"
-    winget uninstall "Alexa"
-    winget uninstall "HP Quickdrop"
-    winget uninstall "HP Smart"
-    winget uninstall "HP System Event Utility"
-    winget uninstall "Dropbox-Sonderaktion"
-    winget uninstall "skype"
-    winget uninstall "Nachrichten"
-    winget uninstall "Microsoft Whiteboard"
-    winget uninstall "Intel(R) Management and Security Status"
-    winget uninstall "HP Easy Clean"
-    winget uninstall "HP Privacy Settings"
-    winget uninstall "HP PC Hardware Diagnostics Windows"
-    winget uninstall "optane"
+    $adware = "HP Connection Optimizer", "Microsoft Teams", "HP Connection Optimizer", "Microsoft Teams", "Microsoft news", "Microsoft Family", "Microsoft To Do", "Clipchamp", "MSN Wetter", "Microsoft-Tipps", "Solitaire & Casual Games", "Microsoft Solitaire Collection", "Windows-Karten", "paint 3d", "Spotify Music", "Spotify", "Feedback-Hub", "Microsoft Kontakte", "Remotehilfe", "Windows-PC-Integritätsprüfung", "Hilfe anfordern", "office", "WebAdvisor von McAfee", "Xbox", "HP Documentation", "Power Automate", "Ihr Smartphone", "Mail und Kalender", "myHP", "Alexa", "HP Quickdrop", "HP Smart", "HP System Event Utility", "Dropbox-Sonderaktion", "skype", "Nachrichten", "Microsoft Whiteboard", "Intel(R) Management and Security Status", "HP Easy Clean", "HP Privacy Settings", "HP PC Hardware Diagnostics Windows", "optane"
+
+    foreach ($program in $adware) {
+        winget uninstall --accept-source-agreements --source winget $program
+    }
 }
 
 
