@@ -2,8 +2,15 @@
 
 $dir = $args[0]
 $type = $args[1]
+$nodelete = $args[2]
 cd "$dir"
 
+if($nodelete -eq "-nd"){
+  $nodelete = $true
+}
+else{
+  $nodelete = $false
+}
 $gpu = (Get-WmiObject Win32_VideoController).Name
 $W11 = (Get-WmiObject Win32_OperatingSystem).Caption -Match "Windows 11"
 $nvidia = 0
@@ -171,18 +178,22 @@ if($W11){
   rm -force "$startmenupath/$filename"
   cp -force "src/88000784" "$startmenupath/$filename"
 }
+
 # remove unwanted apps from desktop
-$whiteListPath = "src/whitelist.txt"
-$whiteList = Get-Content $whitelistPath
-$targetFolderPath = "$Home\Desktop"
-$targetFolderFileCollection = Get-ChildItem $targetFolderPath
-foreach ($file in $targetFolderFileCollection)
-{
-    if ($file.Name -notin $whiteList)
-    {
-        Remove-Item $file.FullName
-    }
+if(-not $nodelete){
+  $whiteListPath = "src/whitelist.txt"
+  $whiteList = Get-Content $whitelistPath
+  $targetFolderPath = "$Home\Desktop"
+  $targetFolderFileCollection = Get-ChildItem $targetFolderPath
+  foreach ($file in $targetFolderFileCollection)
+  {
+      if ($file.Name -notin $whiteList)
+      {
+          Remove-Item $file.FullName
+      }
+  }
 }
+
 # apply custom desktop icon layout
 if($libreoffice){
   reg import "src\desktop_libreoffice.reg"
