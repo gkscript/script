@@ -172,6 +172,7 @@ Function Protect-Privacy {
 }
 
 function uninstallfun{
+    Write-Progress -Activity "Uninstalling Adware" -Status "90% Complete:" -PercentComplete 90
     $adware = "HP Connection Optimizer", "Microsoft Teams", "HP Connection Optimizer", "Microsoft Teams", "Microsoft news", "Microsoft Family", "Microsoft To Do", "Clipchamp", "MSN Wetter", "Microsoft-Tipps", "Solitaire & Casual Games", "Microsoft Solitaire Collection", "Windows-Karten", "paint 3d", "Spotify Music", "Spotify", "Feedback-Hub", "Microsoft Kontakte", "Remotehilfe", "Windows-PC-Integritätsprüfung", "Hilfe anfordern", "office", "WebAdvisor von McAfee", "Xbox", "HP Documentation", "Power Automate", "Ihr Smartphone", "Mail und Kalender", "myHP", "Alexa", "HP Quickdrop", "HP Smart", "HP System Event Utility", "Dropbox-Sonderaktion", "skype", "Nachrichten", "Microsoft Whiteboard", "Intel(R) Management and Security Status", "HP Easy Clean", "HP Privacy Settings", "HP PC Hardware Diagnostics Windows", "optane"
 
     foreach ($program in $adware) {

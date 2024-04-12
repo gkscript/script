@@ -22,7 +22,7 @@ if (-not (test-connection 8.8.8.8 -quiet)){
   $null=[System.Windows.Forms.Messagebox]::Show("Check your Internet connection!")
   exit 1
 }
-
+Write-Progress -Activity "Installing Package managers" -Status "1% Complete:" -PercentComplete 1
 # install winget
 if(-not (Get-Command "winget" -errorAction SilentlyContinue)){
   Add-AppPackage "src/UI.Xaml.2.7_7.2208.15002.0.Appx"
@@ -41,6 +41,7 @@ if(-not (Get-Command "choco" -errorAction SilentlyContinue)){
 }
 src/RefreshEnv.cmd
 # install programs
+Write-Progress -Activity "Installing Programs" -Status "5% Complete:" -PercentComplete 5
 if(Get-Command "choco" -errorAction SilentlyContinue){     
   choco feature enable -n allowGlobalConfirmation
   switch($type)
@@ -85,7 +86,7 @@ Add-AppPackage "Microsoft.UI.Xaml.2.8_8.Appx"
 Add-AppPackage "Microsoft.VCLibs.140.00.Appx"
 Add-AppPackage "DynamicTheme.Msixbundle"
 #>
-
+Write-Progress -Activity "Installing Dynamic Theme" -Status "20% Complete:" -PercentComplete 20
 # install dynamic theme
 winget install --accept-package-agreements --accept-source-agreements --source msstore "dynamic theme" 
 start-sleep -m 500
@@ -98,6 +99,7 @@ $Shortcut.Save()
 
 # install geforce experience
 if ($gpu -like "*Nvidia*" -or "*NVIDIA*"){
+  Write-Progress -Activity "Installing Nvidia Driver" -Status "25% Complete:" -PercentComplete 25
   $nvidia = 1
   choco install -y --ignorechecksum geforce-experience geforce-game-ready-driver
 }
@@ -146,7 +148,7 @@ if ($type -eq 2 -or 3)
     cp "$libreofficepath\LibreOffice Writer.lnk" "C:\Users\Public\Desktop"
     cp "$libreofficepath\LibreOffice Impress.lnk" "C:\Users\Public\Desktop"
 }
-
+Write-Progress -Activity "Applying Registry Tweaks" -Status "40% Complete:" -PercentComplete 40
 # registry tweaks
 if(-not $unbranded){
   reg import "src/Logo_Info.reg"
@@ -215,6 +217,7 @@ explorer.exe
 net start W32Time
 W32tm /resync /force
 echo "Uninstalling Office..."
+Write-Progress -Activity "Uninstalling Office" -Status "70% Complete:" -PercentComplete 70
 src\officesetup.exe /configure "src\office.xml"
 src/debloat.ps1
 # set default apps, thanks Joachim
