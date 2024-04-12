@@ -49,6 +49,8 @@ if(Get-Command "choco" -errorAction SilentlyContinue){
             1{choco install -y --ignorechecksum vlc firefox googlechrome 7zip}                                    #business_it
             2{choco install -y --ignorechecksum vlc firefox googlechrome 7zip adobereader libreoffice paint.net}  #consumer
             3{choco install -y --ignorechecksum vlc firefox googlechrome 7zip libreoffice paint.net}              #consumer_it
+            4{choco install -y --ignorechecksum vlc firefox googlechrome 7zip libreoffice paint.net               #unbranded
+              $unbranded = $true}                                                                                 
             default{
                 write-host "Option not recognized! Stopping..."
                 exit 1
@@ -62,6 +64,7 @@ if(Get-Command "choco" -errorAction SilentlyContinue){
             1{choco install -y --ignorechecksum vlc firefox googlechrome 7zip}                                    #business_it
             2{choco install -y --ignorechecksum vlc firefox googlechrome 7zip adobereader libreoffice paint.net}  #consumer
             3{choco install -y --ignorechecksum vlc firefox googlechrome 7zip libreoffice paint.net}              #consumer_it
+            4{choco install -y --ignorechecksum vlc firefox googlechrome 7zip libreoffice paint.net}              #unbranded
             default{
                 write-host "Option not recognized! Stopping..."
                 exit 1
@@ -108,10 +111,13 @@ if($blinfo.EncryptionPercentage -ne '0' -and $blinfo.MountPoint -eq 'C:'){
 if (-not (Test-Path -Path 'C:\Install' -PathType Container -errorAction SilentlyContinue)) {
     mkdir "C:\Install"
 }
-cp "src/oemlogo.bmp" "C:\Windows\System32"
+if(-not $unbranded){
+  cp "src/oemlogo.bmp" "C:\Windows\System32"
+  cp "src/Netixx Helpdesk.exe" "C:\Install"
+  New-Item -Path "C:\Users\Public\Desktop\Netixx Helpdesk" -ItemType SymbolicLink -Value "C:\Install\Netixx Helpdesk.exe"
+}
+
 cp "src/DynamicTheme.Msixbundle" "C:\Install"
-cp "src/Netixx Helpdesk.exe" "C:\Install"
-New-Item -Path "C:\Users\Public\Desktop\Netixx Helpdesk" -ItemType SymbolicLink -Value "C:\Install\Netixx Helpdesk.exe"
 if($type -eq 1 -or 3)
 {
     cp "src/readerdc_it_xa_crd_install.exe" "C:\Install"
@@ -142,7 +148,9 @@ if ($type -eq 2 -or 3)
 }
 
 # registry tweaks
-reg import "src/Logo_Info.reg"
+if(-not $unbranded){
+  reg import "src/Logo_Info.reg"
+}
 reg import "src/icons.reg"
 Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize" -Name "SystemUsesLightTheme" -Value 0
 Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize" -Name "AppsUseLightTheme" -Value 1
@@ -201,7 +209,7 @@ if($libreoffice){
 else{
   reg import "src/desktop.reg"
 }
-sleep 2
+sleep 1
 explorer.exe
 
 net start W32Time
