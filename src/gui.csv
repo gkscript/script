@@ -1,0 +1,6 @@
+Section,Method,Command,Arguments,Name,Description
+Netixx GK,cmd,src\business_it.bat,,Business,
+Netixx GK,cmd,src\business.bat,,Business ITA,
+Netixx GK,cmd,src\consumer.bat,,Consumer,
+Netixx GK,cmd,src\consumer_it.bat,,Consumer ITA,
+Unbranded GK,cmd,unbranded.bat,,Unbranded GK,
