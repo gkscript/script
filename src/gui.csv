@@ -1,0 +1,6 @@
+Section,Method,Command,Arguments,Name,Description
+Netixx GK,powershell_inline,.\src\main.ps1 -type 0 -nodelete 0,,Business,
+Netixx GK,powershell_inline,.\src\main.ps1 -type 1 -nodelete 0,,Business ITA,
+Netixx GK,powershell_inline,.\src\main.ps1 -type 2 -nodelete 0,,Consumer,
+Netixx GK,powershell_inline,.\src\main.ps1 -type 3 -nodelete 0,,Consumer ITA,
+Unbranded GK,powershell_inline,.\src\main.ps1 -type 4 -nodelete 0,,Unbranded GK,
