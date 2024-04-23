@@ -1,16 +1,13 @@
+param(
+     [Parameter(Mandatory)]
+     [string]$type,
+
+     [Parameter()]
+     [string]$nodelete
+ )
+ 
 [System.Reflection.Assembly]::LoadWithPartialName("System.Windows.Forms")
 
-$dir = $args[0]
-$type = $args[1]
-$nodelete = $args[2]
-cd "$dir"
-
-if($nodelete -eq "-nd"){
-  $nodelete = $true
-}
-else{
-  $nodelete = $false
-}
 $gpu = (Get-WmiObject Win32_VideoController).Name
 $W11 = (Get-WmiObject Win32_OperatingSystem).Caption -Match "Windows 11"
 $nvidia = 0
