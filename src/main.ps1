@@ -62,7 +62,7 @@ if(Get-Command "choco" -errorAction SilentlyContinue){
             1{choco install -y --ignorechecksum vlc firefox googlechrome 7zip}                                    #business_it
             2{choco install -y --ignorechecksum vlc firefox googlechrome 7zip adobereader libreoffice paint.net}  #consumer
             3{choco install -y --ignorechecksum vlc firefox googlechrome 7zip libreoffice paint.net}              #consumer_it
-            4{choco install -y --ignorechecksum vlc firefox googlechrome 7zip libreoffice paint.net}              #unbranded
+            4{choco install -y --ignorechecksum vlc firefox googlechrome 7zip paint.net}              #unbranded
             default{
                 write-host "Option not recognized! Stopping..."
                 exit 1
