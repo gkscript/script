@@ -1,179 +1,191 @@
-<#Function DebloatAll {
-    #Removes AppxPackages
-    #Credit to /u/GavinEke for a modified version of my whitelist code
-    $WhitelistedApps = 'Microsoft.WindowsCalculator|Microsoft.WindowsStore|Microsoft.Windows.Photos|CanonicalGroupLimited.UbuntuonWindows|Microsoft.XboxGameCallableUI|Microsoft.XboxGamingOverlay|Microsoft.Xbox.TCUI|Microsoft.XboxGamingOverlay|Microsoft.XboxIdentityProvider|Microsoft.MSPaint|Microsoft.WindowsCamera|.NET|Framework|Microsoft.HEIFImageExtension|Microsoft.StorePurchaseApp|Microsoft.VP9VideoExtensions|Microsoft.WebMediaExtensions|Microsoft.WebpImageExtension|Microsoft.DesktopAppInstaller|WindSynthBerry|MIDIBerry'
-    #NonRemovable Apps that where getting attempted and the system would reject the uninstall, speeds up debloat and prevents 'initalizing' overlay when removing apps
-    $NonRemovable = '1527c705-839a-4832-9118-54d4Bd6a0c89|c5e2524a-ea46-4f67-841f-6a9465d9d515|E2A4F912-2574-4A75-9BB0-0D023378592B|F46D4000-FD22-4DB4-AC8E-4E1DDDE828FE|InputApp|Microsoft.AAD.BrokerPlugin|Microsoft.AccountsControl|Microsoft.BioEnrollment|Microsoft.CredDialogHost|Microsoft.ECApp|Microsoft.LockApp|Microsoft.MicrosoftEdgeDevToolsClient|Microsoft.MicrosoftEdge|Microsoft.PPIProjection|Microsoft.Win32WebViewHost|Microsoft.Windows.Apprep.ChxApp|Microsoft.Windows.AssignedAccessLockApp|Microsoft.Windows.CapturePicker|Microsoft.Windows.CloudExperienceHost|Microsoft.Windows.ContentDeliveryManager|Microsoft.Windows.Cortana|Microsoft.Windows.NarratorQuickStart|Microsoft.Windows.ParentalControls|Microsoft.Windows.PeopleExperienceHost|Microsoft.Windows.PinningConfiuninstallationDialog|Microsoft.Windows.SecHealthUI|Microsoft.Windows.SecureAssessmentBrowser|Microsoft.Windows.ShellExperienceHost|Microsoft.Windows.XGpuEjectDialog|Microsoft.XboxGameCallableUI|Windows.CBSPreview|windows.immersivecontrolpanel|Windows.PrintDialog|Microsoft.VCLibs.140.00|Microsoft.Services.Store.Engagement|Microsoft.UI.Xaml.2.0|*Nvidia*'
-    Get-AppxPackage -AllUsers | Where-Object {$_.Name -NotMatch $WhitelistedApps -and $_.Name -NotMatch $NonRemovable} | Remove-AppxPackage
-    Get-AppxPackage | Where-Object {$_.Name -NotMatch $WhitelistedApps -and $_.Name -NotMatch $NonRemovable} | Remove-AppxPackage
-    Get-AppxProvisionedPackage -Online | Where-Object {$_.PackageName -NotMatch $WhitelistedApps -and $_.PackageName -NotMatch $NonRemovable} | Remove-AppxProvisionedPackage -Online
-}#>
+#https://github.com/LeDragoX/Win-Debloat-Tools 
+    Write-Progress -Activity "Uninstalling Adware" -Status "90% Complete:" -PercentComplete 85
+    $MSApps = @(
+        # Default Windows 10+ apps
+        "Microsoft.3DBuilder"                    # 3D Builder
+        "Microsoft.549981C3F5F10"                # Cortana
+        "Microsoft.Appconnector"
+        "Microsoft.BingFinance"                  # Finance
+        "Microsoft.BingFoodAndDrink"             # Food And Drink
+        "Microsoft.BingHealthAndFitness"         # Health And Fitness
+        "Microsoft.BingNews"                     # News
+        "Microsoft.BingSports"                   # Sports
+        "Microsoft.BingTranslator"               # Translator
+        "Microsoft.BingTravel"                   # Travel
+        "Microsoft.BingWeather"                  # Weather
+        "Microsoft.CommsPhone"
+        "Microsoft.ConnectivityStore"
+        "Microsoft.GetHelp"
+        "Microsoft.Getstarted"
+        "Microsoft.Messaging"
+        "Microsoft.Microsoft3DViewer"
+        "Microsoft.MicrosoftOfficeHub"
+        "Microsoft.MicrosoftPowerBIForWindows"
+        "Microsoft.MicrosoftSolitaireCollection" # MS Solitaire
+        "Microsoft.MixedReality.Portal"
+        "Microsoft.NetworkSpeedTest"
+        "Microsoft.Office.OneNote"               # MS Office One Note
+        "Microsoft.Office.Sway"
+        "Microsoft.OneConnect"
+        "Microsoft.People"                       # People
+        "Microsoft.MSPaint"                      # Paint 3D
+        "Microsoft.Print3D"                      # Print 3D
+        "Microsoft.SkypeApp"                     # Skype (Who still uses Skype? Use Discord)
+        "Microsoft.Todos"                        # Microsoft To Do
+        "Microsoft.Wallet"
+        "Microsoft.Whiteboard"                   # Microsoft Whiteboard
+        #"Microsoft.WindowsAlarms"                # Alarms
+        "microsoft.windowscommunicationsapps"
+        "Microsoft.WindowsFeedbackHub"           # Feedback Hub
+        "Microsoft.WindowsMaps"                  # Maps
+        "Microsoft.WindowsPhone"
+        "Microsoft.WindowsReadingList"
+        "Microsoft.WindowsSoundRecorder"         # Windows Sound Recorder
+        "Microsoft.XboxApp"                      # Xbox Console Companion (Replaced by new App)
+        "Microsoft.YourPhone"                    # Your Phone
+        "Microsoft.ZuneMusic"                    # Groove Music / (New) Windows Media Player
+        "Microsoft.ZuneVideo"                    # Movies & TV
 
-Function Remove-Keys {
-            
-    $Keys = @(
-            
-        #Remove Background Tasks
-        "HKCR:\Extensions\ContractId\Windows.BackgroundTasks\PackageId\46928bounde.EclipseManager_2.2.4.51_neutral__a5h4egax66k6y"
-        "HKCR:\Extensions\ContractId\Windows.BackgroundTasks\PackageId\ActiproSoftwareLLC.562882FEEB491_2.6.18.18_neutral__24pqs290vpjk0"
-        "HKCR:\Extensions\ContractId\Windows.BackgroundTasks\PackageId\Microsoft.MicrosoftOfficeHub_17.7909.7600.0_x64__8wekyb3d8bbwe"
-        "HKCR:\Extensions\ContractId\Windows.BackgroundTasks\PackageId\Microsoft.PPIProjection_10.0.15063.0_neutral_neutral_cw5n1h2txyewy"
-        "HKCR:\Extensions\ContractId\Windows.BackgroundTasks\PackageId\Microsoft.XboxGameCallableUI_1000.15063.0.0_neutral_neutral_cw5n1h2txyewy"
-        "HKCR:\Extensions\ContractId\Windows.BackgroundTasks\PackageId\Microsoft.XboxGameCallableUI_1000.16299.15.0_neutral_neutral_cw5n1h2txyewy"
-            
-        #Windows File
-        "HKCR:\Extensions\ContractId\Windows.File\PackageId\ActiproSoftwareLLC.562882FEEB491_2.6.18.18_neutral__24pqs290vpjk0"
-            
-        #Registry keys to delete if they aren't uninstalled by RemoveAppXPackage/RemoveAppXProvisionedPackage
-        "HKCR:\Extensions\ContractId\Windows.Launch\PackageId\46928bounde.EclipseManager_2.2.4.51_neutral__a5h4egax66k6y"
-        "HKCR:\Extensions\ContractId\Windows.Launch\PackageId\ActiproSoftwareLLC.562882FEEB491_2.6.18.18_neutral__24pqs290vpjk0"
-        "HKCR:\Extensions\ContractId\Windows.Launch\PackageId\Microsoft.PPIProjection_10.0.15063.0_neutral_neutral_cw5n1h2txyewy"
-        "HKCR:\Extensions\ContractId\Windows.Launch\PackageId\Microsoft.XboxGameCallableUI_1000.15063.0.0_neutral_neutral_cw5n1h2txyewy"
-        "HKCR:\Extensions\ContractId\Windows.Launch\PackageId\Microsoft.XboxGameCallableUI_1000.16299.15.0_neutral_neutral_cw5n1h2txyewy"
-            
-        #Scheduled Tasks to delete
-        "HKCR:\Extensions\ContractId\Windows.PreInstalledConfigTask\PackageId\Microsoft.MicrosoftOfficeHub_17.7909.7600.0_x64__8wekyb3d8bbwe"
-            
-        #Windows Protocol Keys
-        "HKCR:\Extensions\ContractId\Windows.Protocol\PackageId\ActiproSoftwareLLC.562882FEEB491_2.6.18.18_neutral__24pqs290vpjk0"
-        "HKCR:\Extensions\ContractId\Windows.Protocol\PackageId\Microsoft.PPIProjection_10.0.15063.0_neutral_neutral_cw5n1h2txyewy"
-        "HKCR:\Extensions\ContractId\Windows.Protocol\PackageId\Microsoft.XboxGameCallableUI_1000.15063.0.0_neutral_neutral_cw5n1h2txyewy"
-        "HKCR:\Extensions\ContractId\Windows.Protocol\PackageId\Microsoft.XboxGameCallableUI_1000.16299.15.0_neutral_neutral_cw5n1h2txyewy"
-               
-        #Windows Share Target
-        "HKCR:\Extensions\ContractId\Windows.ShareTarget\PackageId\ActiproSoftwareLLC.562882FEEB491_2.6.18.18_neutral__24pqs290vpjk0"
+        # Apps which other apps depend on
+        #"Microsoft.Advertising.Xaml"
+
+        # Default Windows 11 apps
+        "Clipchamp.Clipchamp"				     # Clipchamp – Video Editor
+        "MicrosoftWindows.Client.WebExperience"  # Taskbar Widgets
+        "MicrosoftTeams"                         # Microsoft Teams / Preview
+
+        # <==========[ DIY ]==========> (Remove the # to Uninstall)
+
+        # [DIY] Default apps i'll keep
+        #"Microsoft.FreshPaint"             # Paint
+        #"Microsoft.MicrosoftStickyNotes"   # Sticky Notes
+        #"Microsoft.WindowsCalculator"      # Calculator
+        #"Microsoft.WindowsCamera"          # Camera
+        #"Microsoft.ScreenSketch"           # Snip and Sketch (now called Snipping tool, replaces the Win32 version in clean installs)
+        "Microsoft.Windows.DevHome"        # Dev Home
+        #"Microsoft.Windows.Photos"         # Photos / Video Editor
+
+        # [DIY] Can't be reinstalled
+        #"Microsoft.WindowsStore"           # Windows Store
+
+        # Apps which cannot be removed using Remove-AppxPackage
+        #"Microsoft.BioEnrollment"
+        #"Microsoft.WindowsFeedback"        # Feedback Module
+        #"Windows.ContactSupport"
     )
-        
-    #This writes the output of each key it is removing and also removes the keys listed above.
-    ForEach ($Key in $Keys) {
-        Write-Output "Removing $Key from registry"
-        Remove-Item $Key -Recurse
+
+    $ThirdPartyApps = @(
+        "*ACGMediaPlayer*"
+        "*ActiproSoftwareLLC*"
+        "*AdobePhotoshopExpress*"           # Adobe Photoshop Express
+        "Amazon.com.Amazon"                 # Amazon Shop
+        "*Asphalt8Airborne*"                # Asphalt 8 Airbone
+        "*AutodeskSketchBook*"
+        "*BubbleWitch3Saga*"                # Bubble Witch 3 Saga
+        "*CaesarsSlotsFreeCasino*"
+        "*CandyCrush*"                      # Candy Crush
+        "*COOKINGFEVER*"
+        "*CyberLinkMediaSuiteEssentials*"
+        "*DisneyMagicKingdoms*"
+        "*Dolby*"                           # Dolby Products (Like Atmos)
+        "*DrawboardPDF*"
+        "*Duolingo-LearnLanguagesforFree*"  # Duolingo
+        "*EclipseManager*"
+        "*FarmVille2CountryEscape*"
+        "*FitbitCoach*"
+        "*Flipboard*"                       # Flipboard
+        "*HiddenCity*"
+        "*Keeper*"
+        "*LinkedInforWindows*"
+        "*MarchofEmpires*"
+        "*NYTCrossword*"
+        "*OneCalendar*"
+        "*PandoraMediaInc*"
+        "*PhototasticCollage*"
+        "*PicsArt-PhotoStudio*"
+        "*PolarrPhotoEditorAcademicEdition*"
+        "*RoyalRevolt*"                     # Royal Revolt
+        "*Shazam*"
+        "*Sidia.LiveWallpaper*"             # Live Wallpaper
+        "*Speed Test*"
+        "*Sway*"
+        "*WinZipUniversal*"
+        "*Wunderlist*"
+        "*XING*"
+    )
+
+    $ManufacturerApps = @(
+        # Dell Bloat
+        "DB6EA5DB.MediaSuiteEssentialsforDell"
+        "DB6EA5DB.PowerDirectorforDell"
+        "DB6EA5DB.Power2GoforDell"
+        "DB6EA5DB.PowerMediaPlayerforDell"
+        #"DellInc.423703F9C7E0E"                # Alienware OC Controls
+        #"DellInc.6066037A8FCF7"                # Alienware Control Center
+        #"DellInc.AlienwareCommandCenter"       # Alienware Command Center
+        #"DellInc.AlienwareFXAW*"               # Alienware FX AWxx versions
+        #"DellInc.AlienwareFXAW21"              # Alienware FX AW21
+        "DellInc.DellCustomerConnect"           # Dell Customer Connect
+        "DellInc.DellDigitalDelivery"           # Dell Digital Delivery
+        "DellInc.DellHelpSupport"
+        "DellInc.DellProductRegistration"
+        "DellInc.MyDell"                        # My Dell
+
+        # HP
+        ""
+    )
+
+    $SocialMediaApps = @(
+        "5319275A.WhatsAppDesktop"  # WhatsApp
+        "BytedancePte.Ltd.TikTok"   # TikTok
+        "FACEBOOK.317180B0BB486"    # Messenger
+        "FACEBOOK.FACEBOOK"         # Facebook
+        "Facebook.Instagram*"       # Instagram / Beta
+        "*Twitter*"                 # Twitter
+        "*Viber*"
+    )
+
+    $StreamingServicesApps = @(
+        "AmazonVideo.PrimeVideo"    # Amazon Prime Video
+        "*Hulu*"
+        "*iHeartRadio*"
+        "*Netflix*"                 # Netflix
+        "*Plex*"                    # Plex
+        "*SlingTV*"
+        "SpotifyAB.SpotifyMusic"    # Spotify
+        "*TuneInRadio*"
+    )
+
+function Remove-UWPApp($AppxPackages) {
+
+    Process {
+        ForEach ($AppxPackage in $AppxPackages) {
+            If (!((Get-AppxPackage -AllUsers -Name "$AppxPackage") -or (Get-AppxProvisionedPackage -Online | Where-Object DisplayName -like "$AppxPackage"))) {
+                Write-Status "?", $TweakType -Status "$AppxPackage was already removed or not found..." -Warning
+                Continue
+            }
+
+            Write-Status "Trying to remove $AppxPackage from ALL users..."
+            Get-AppxPackage -AllUsers -Name "$AppxPackage" | Remove-AppxPackage -AllUsers
+            Get-AppxProvisionedPackage -Online | Where-Object DisplayName -like "$AppxPackage" | Remove-AppxProvisionedPackage -Online -AllUsers
+        }
     }
 }
 
-
-Function Protect-Privacy {
-            
-    #Disables Windows Feedback Experience
-    Write-Output "Disabling Windows Feedback Experience program"
-    $Advertising = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AdvertisingInfo"
-    If (Test-Path $Advertising) {
-        Set-ItemProperty $Advertising Enabled -Value 0 
-    }
-
-    #Disables Web Search in Start Menu
-    Write-Output "Disabling Bing Search in Start Menu"
-    $WebSearch = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Search"
-    Set-ItemProperty "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Search" BingSearchEnabled -Value 0 
-    If (!(Test-Path $WebSearch)) {
-        New-Item $WebSearch
-    }
-    Set-ItemProperty $WebSearch DisableWebSearch -Value 1 
-            
-    #Stops the Windows Feedback Experience from sending anonymous data
-    Write-Output "Stopping the Windows Feedback Experience program"
-    $Period = "HKCU:\Software\Microsoft\Siuf\Rules"
-    If (!(Test-Path $Period)) { 
-        New-Item $Period
-    }
-    Set-ItemProperty $Period PeriodInNanoSeconds -Value 0 
-
-    #Prevents bloatware applications from returning and removes Start Menu suggestions               
-    Write-Output "Adding Registry key to prevent bloatware apps from returning"
-    $registryPath = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent"
-    $registryOEM = "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager"
-    If (!(Test-Path $registryPath)) { 
-        New-Item $registryPath
-    }
-    Set-ItemProperty $registryPath DisableWindowsConsumerFeatures -Value 1 
-
-    If (!(Test-Path $registryOEM)) {
-        New-Item $registryOEM
-    }
-    Set-ItemProperty $registryOEM  ContentDeliveryAllowed -Value 0 
-    Set-ItemProperty $registryOEM  OemPreInstalledAppsEnabled -Value 0 
-    Set-ItemProperty $registryOEM  PreInstalledAppsEnabled -Value 0 
-    Set-ItemProperty $registryOEM  PreInstalledAppsEverEnabled -Value 0 
-    Set-ItemProperty $registryOEM  SilentInstalledAppsEnabled -Value 0 
-    Set-ItemProperty $registryOEM  SystemPaneSuggestionsEnabled -Value 0          
+function Write-Status($Types) {
     
-    #Preping mixed Reality Portal for removal    
-    Write-Output "Setting Mixed Reality Portal value to 0 so that you can uninstall it in Settings"
-    $Holo = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Holographic"    
-    If (Test-Path $Holo) {
-        Set-ItemProperty $Holo  FirstRunSucceeded -Value 0 
+    $TypesDone = ""
+
+    ForEach ($Type in $Types) {
+        $TypesDone += "Removed $Type"
     }
 
-    #Disables Wi-fi Sense
-    Write-Output "Disabling Wi-Fi Sense"
-    $WifiSense1 = "HKLM:\SOFTWARE\Microsoft\PolicyManager\default\WiFi\AllowWiFiHotSpotReporting"
-    $WifiSense2 = "HKLM:\SOFTWARE\Microsoft\PolicyManager\default\WiFi\AllowAutoConnectToWiFiSenseHotspots"
-    $WifiSense3 = "HKLM:\SOFTWARE\Microsoft\WcmSvc\wifinetworkmanager\config"
-    If (!(Test-Path $WifiSense1)) {
-        New-Item $WifiSense1
-    }
-    Set-ItemProperty $WifiSense1  Value -Value 0 
-    If (!(Test-Path $WifiSense2)) {
-        New-Item $WifiSense2
-    }
-    Set-ItemProperty $WifiSense2  Value -Value 0 
-    Set-ItemProperty $WifiSense3  AutoConnectAllowedOEM -Value 0 
-        
-
-        
-    #Turns off Data Collection via the AllowTelemtry key by changing it to 0
-    Write-Output "Turning off Data Collection"
-    $DataCollection1 = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\DataCollection"
-    $DataCollection2 = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection"
-    $DataCollection3 = "HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Policies\DataCollection"    
-    If (Test-Path $DataCollection1) {
-        Set-ItemProperty $DataCollection1  AllowTelemetry -Value 0 
-    }
-    If (Test-Path $DataCollection2) {
-        Set-ItemProperty $DataCollection2  AllowTelemetry -Value 0 
-    }
-    If (Test-Path $DataCollection3) {
-        Set-ItemProperty $DataCollection3  AllowTelemetry -Value 0 
-    }
-    
-    #Disabling Location Tracking
-    Write-Output "Disabling Location Tracking"
-    $SensorState = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Sensor\Overrides\{BFA794E4-F964-4FDB-90F6-51056BFE4B44}"
-    $LocationConfig = "HKLM:\SYSTEM\CurrentControlSet\Services\lfsvc\Service\Configuration"
-    If (!(Test-Path $SensorState)) {
-        New-Item $SensorState
-    }
-    Set-ItemProperty $SensorState SensorPeuninstallissionState -Value 0 
-    If (!(Test-Path $LocationConfig)) {
-        New-Item $LocationConfig
-    }
-    Set-ItemProperty $LocationConfig Status -Value 0 
-        
-    #Disables People icon on Taskbar
-    Write-Output "Disabling People icon on Taskbar"
-    $People = 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced\People'
-    If (Test-Path $People) {
-        Set-ItemProperty $People -Name PeopleBand -Value 0
-    }
-
-    #Disables scheduled tasks that are considered unnecessary
-    Write-Output "Disabling scheduled tasks"
-    Get-ScheduledTask  XblGameSaveTaskLogon | Disable-ScheduledTask
-    Get-ScheduledTask  XblGameSaveTask | Disable-ScheduledTask
-    Get-ScheduledTask  Consolidator | Disable-ScheduledTask
-    Get-ScheduledTask  UsbCeip | Disable-ScheduledTask
-    Get-ScheduledTask  DmClient | Disable-ScheduledTask
-    Get-ScheduledTask  DmClientOnScenarioDownload | Disable-ScheduledTask
-
-    Write-Output "Stopping and disabling Diagnostics Tracking Service"
-    #Disabling the Diagnostics Tracking Service
-    Stop-Service "DiagTrack"
-    Set-Service "DiagTrack" -StartupType Disabled
+    echo "$TypesDone".Trim()
 }
 
 function uninstallfun{
-    Write-Progress -Activity "Uninstalling Adware" -Status "90% Complete:" -PercentComplete 90
-    $adware = "HP Connection Optimizer", "Microsoft Teams", "HP Connection Optimizer", "Microsoft Teams", "Microsoft news", "Microsoft Family", "Microsoft To Do", "Clipchamp", "MSN Wetter", "Microsoft-Tipps", "Solitaire & Casual Games", "Microsoft Solitaire Collection", "Windows-Karten", "paint 3d", "Spotify Music", "Spotify", "Feedback-Hub", "Microsoft Kontakte", "Remotehilfe", "Windows-PC-Integritätsprüfung", "Hilfe anfordern", "office", "WebAdvisor von McAfee", "Xbox", "HP Documentation", "Power Automate", "Ihr Smartphone", "Mail und Kalender", "myHP", "Alexa", "HP Quickdrop", "HP Smart", "HP System Event Utility", "Dropbox-Sonderaktion", "skype", "Nachrichten", "Microsoft Whiteboard", "Intel(R) Management and Security Status", "HP Easy Clean", "HP Privacy Settings", "HP PC Hardware Diagnostics Windows", "optane", "officehub", "outlook for windows"
+
+    $adware = "HP Connection Optimizer", "Microsoft Family", "Microsoft-Tipps", "Solitaire & Casual Games", "Microsoft Solitaire Collection", "Feedback-Hub", "Microsoft Kontakte", "Remotehilfe", "office", "WebAdvisor von McAfee", "Xbox", "HP Documentation", "Power Automate", "Mail und Kalender", "myHP", "Alexa", "HP Quickdrop", "HP Smart", "HP System Event Utility", "Dropbox-Sonderaktion", "skype", "Nachrichten", "Microsoft Whiteboard", "Intel(R) Management and Security Status", "HP Easy Clean", "HP Privacy Settings", "HP PC Hardware Diagnostics Windows", "optane", "officehub", "outlook for windows"
 
     foreach ($program in $adware) {
         winget uninstall --accept-source-agreements --source winget $program
@@ -193,13 +205,12 @@ function chrome{
     taskkill /f /im autohotkey32.exe
 }
 
-
+Remove-UWPApp -AppxPackages $MSApps
+Remove-UWPApp -AppxPackages $ThirdPartyApps
+Remove-UWPApp -AppxPackages $ManufacturerApps
+Remove-UWPApp -AppxPackages $SocialMediaApps
+Remove-UWPApp -AppxPackages $StreamingServicesApps
 uninstallfun
-#DebloatAll
-#Start-Sleep 1
-Remove-Keys
-#Start-Sleep 1
-Protect-Privacy
 $null = winget list -q "gmail"
 if ($?){
 chrome
