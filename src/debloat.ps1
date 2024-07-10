@@ -21,14 +21,14 @@
         "Microsoft.Microsoft3DViewer"
         "Microsoft.MicrosoftOfficeHub"
         "Microsoft.MicrosoftPowerBIForWindows"
-        "Microsoft.MicrosoftSolitaireCollection" # MS Solitaire
+        #"Microsoft.MicrosoftSolitaireCollection" # MS Solitaire
         "Microsoft.MixedReality.Portal"
         "Microsoft.NetworkSpeedTest"
         "Microsoft.Office.OneNote"               # MS Office One Note
         "Microsoft.Office.Sway"
         "Microsoft.OneConnect"
         "Microsoft.People"                       # People
-        "Microsoft.MSPaint"                      # Paint 3D
+        #"Microsoft.MSPaint"                      # Paint 3D
         "Microsoft.Print3D"                      # Print 3D
         "Microsoft.SkypeApp"                     # Skype (Who still uses Skype? Use Discord)
         "Microsoft.Todos"                        # Microsoft To Do
@@ -50,7 +50,7 @@
         #"Microsoft.Advertising.Xaml"
 
         # Default Windows 11 apps
-        "Clipchamp.Clipchamp"				     # Clipchamp – Video Editor
+        #"Clipchamp.Clipchamp"				     # Clipchamp – Video Editor
         "MicrosoftWindows.Client.WebExperience"  # Taskbar Widgets
         "MicrosoftTeams"                         # Microsoft Teams / Preview
 
@@ -181,6 +181,10 @@ function Write-Status($Types) {
     }
 
     echo "$TypesDone".Trim()
+}
+
+function reg{
+    reg import "src\disable_telemetry.reg"
 }
 
 function uninstallfun{
