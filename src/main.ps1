@@ -164,6 +164,9 @@ if (-not(Test-Path $RegKey )) {
     try { $reg.Handle.Close() } catch {}
 }
 New-ItemProperty $RegKey -Name "SearchboxTaskbarMode" -Value "1" -PropertyType Dword -Force
+#disable Windows 11 Microsoft Account nag screen
+Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\UserProfileEngagement" -Name "ScoobeSystemSettingEnabled" -Value 0 -Type DWord
+
 
 # apply custom pinned start apps on Windows 11
 taskkill /f /im explorer.exe
