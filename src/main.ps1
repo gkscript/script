@@ -95,7 +95,7 @@ $Shortcut.TargetPath = $TargetPath
 $Shortcut.Save()
 
 # install geforce experience
-if ($gpu -like "*Nvidia*" -or "*NVIDIA*"){
+if ($gpu -match [regex]::Escape("nvidia")){
   Write-Progress -Activity "Installing Nvidia Driver" -Status "25% Complete:" -PercentComplete 25
   $nvidia = 1
   choco install -y --ignorechecksum geforce-experience geforce-game-ready-driver
