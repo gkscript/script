@@ -5,7 +5,7 @@ param(
      [Parameter()]
      [string]$nodelete
  )
- 
+
 [System.Reflection.Assembly]::LoadWithPartialName("System.Windows.Forms")
 
 $gpu = (Get-WmiObject Win32_VideoController).Name
@@ -22,8 +22,8 @@ if (-not (test-connection 8.8.8.8 -quiet)){
 Write-Progress -Activity "Installing Package managers" -Status "1% Complete:" -PercentComplete 1
 # install winget
 if(-not (Get-Command "winget" -errorAction SilentlyContinue)){
-  Add-AppPackage "src/UI.Xaml.2.7_7.2208.15002.0.Appx"
-  Add-AppPackage "src/VCLibs.140.00.UWPDesktop_14.0.32530.0_x64.Appx"
+  Add-AppPackage "src/Microsoft.UI.Xaml.2.8_8.2310.30001.0_x64.Appx"
+  Add-AppPackage "src/Microsoft.VCLibs.140.00_14.0.33519.0_x64.Appx"
   Add-AppPackage "src/Microsoft.DesktopAppInstaller.msixbundle"
 
 }
