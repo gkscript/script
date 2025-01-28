@@ -164,9 +164,11 @@ if (-not(Test-Path $RegKey )) {
     try { $reg.Handle.Close() } catch {}
 }
 New-ItemProperty $RegKey -Name "SearchboxTaskbarMode" -Value "1" -PropertyType Dword -Force
-#disable Windows 11 Microsoft Account nag screen
-Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\UserProfileEngagement" -Name "ScoobeSystemSettingEnabled" -Value 0 -Type DWord
 
+# Disable W11 nag screen
+Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" -Name "SubscribedContent-310093Enabled" -Value 0
+Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" -Name "SubscribedContent-338393Enabled" -Value 0
+Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" -Name "SubscribedContent-338389Enabled" -Value 0
 
 # apply custom pinned start apps on Windows 11
 taskkill /f /im explorer.exe
@@ -187,6 +189,26 @@ if($W11){
   #cp -force "src/start2.bin" "$env:LOCALAPPDATA/Packages/Microsoft.Windows.StartMenuExperienceHost_cw5n1h2txyewy/LocalState/"
   rm -force "$startmenupath/$filename"
   cp -force "src/88000784" "$startmenupath/$filename"
+
+  #disable Windows 11 Microsoft Account nag screen
+  Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\UserProfileEngagement" -Name "ScoobeSystemSettingEnabled" -Value 0 -Type DWord
+  $RegPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager"
+  $ValueName = "SubscribedContent-310093Enabled"
+
+  if (-not (Test-Path "$RegPath\$ValueName")) {
+      New-ItemProperty -Path $RegPath -Name $ValueName -PropertyType DWord -Value 1
+  } else {
+      $currentValue = Get-ItemProperty -Path $RegPath -Name $ValueName | Select-Object -ExpandProperty $ValueName
+      if ($currentValue -ne 1) {
+          Set-ItemProperty -Path $RegPath -Name $ValueName -Value 1
+      }
+}
+$RegPath = "HKCU:\Software\Policies\Microsoft\Windows\CurrentVersion"
+$ValueName = "AccountNotifications"
+if (-not (Test-Path $RegPath)) {
+    New-Item -Path $RegPath -Force
+}
+Set-ItemProperty -Path $RegPath -Name $ValueName -Value 1 -PropertyType DWord
 }
 
 # remove unwanted apps from desktop
