@@ -15,7 +15,6 @@
         "Microsoft.BingWeather"                  # Weather
         "Microsoft.CommsPhone"
         "Microsoft.ConnectivityStore"
-        "Microsoft.GetHelp"
         "Microsoft.Getstarted"
         "Microsoft.Messaging"
         "Microsoft.Microsoft3DViewer"
