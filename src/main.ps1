@@ -98,7 +98,7 @@ $Shortcut.Save()
 if ($gpu -match [regex]::Escape("nvidia")){
   Write-Progress -Activity "Installing Nvidia Driver" -Status "25% Complete:" -PercentComplete 25
   $nvidia = 1
-  choco install -y --ignorechecksum geforce-experience geforce-game-ready-driver
+  choco install -y --ignorechecksum nvidia-app
 }
 # disable bitlocker
 $blinfo = Get-Bitlockervolume

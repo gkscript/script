@@ -179,7 +179,7 @@ function Write-Status($Types) {
         $TypesDone += "Removed $Type"
     }
 
-    echo "$TypesDone".Trim()
+    Write.Output "$TypesDone".Trim()
 }
 
 function reg{
