@@ -21,10 +21,10 @@ if (-not (test-connection 8.8.8.8 -quiet)){
 }
 Write-Progress -Activity "Installing Package managers" -Status "1% Complete:" -PercentComplete 1
 # install winget
-if(-not (Get-Command "winget" -errorAction SilentlyContinue)){
-  Add-AppPackage "src/Microsoft.UI.Xaml.2.8_8.2310.30001.0_x64.Appx"
-  Add-AppPackage "src/Microsoft.VCLibs.140.00_14.0.33519.0_x64.Appx"
-  Add-AppPackage "src/Microsoft.DesktopAppInstaller.msixbundle"
+# if(-not (Get-Command "winget" -errorAction SilentlyContinue)){
+  # Add-AppPackage "src/Microsoft.UI.Xaml.2.8_8.2310.30001.0_x64.Appx"
+  # Add-AppPackage "src/Microsoft.VCLibs.140.00_14.0.33519.0_x64.Appx"
+  # Add-AppPackage "src/Microsoft.DesktopAppInstaller.msixbundle"
 
 }
 Start-Sleep 1
