@@ -188,7 +188,7 @@ function reg{
 
 function uninstallfun{
 
-    $adware = "HP Connection Optimizer", "Microsoft Family", "Microsoft-Tipps", "Microsoft Solitaire Collection", "Feedback-Hub", "Microsoft Kontakte", "Remotehilfe", "office", "WebAdvisor von McAfee", "Xbox", "HP Documentation", "Power Automate", "Mail und Kalender", "myHP", "Alexa", "HP Quickdrop", "HP Smart", "HP System Event Utility", "Dropbox-Sonderaktion", "skype", "Nachrichten", "Microsoft Whiteboard", "Intel(R) Management and Security Status", "HP Easy Clean", "HP Privacy Settings", "HP PC Hardware Diagnostics Windows", "optane", "officehub", "outlook for windows"
+    $adware = "HP Connection Optimizer", "Microsoft Family", "Microsoft-Tipps", "Microsoft Solitaire Collection", "Feedback-Hub", "Microsoft Kontakte", "office", "WebAdvisor von McAfee", "Xbox", "HP Documentation", "Power Automate", "Mail und Kalender", "myHP", "Alexa", "HP Quickdrop", "HP Smart", "HP System Event Utility", "Dropbox-Sonderaktion", "skype", "Nachrichten", "Microsoft Whiteboard", "Intel(R) Management and Security Status", "HP Easy Clean", "HP Privacy Settings", "HP PC Hardware Diagnostics Windows", "optane", "officehub", "outlook for windows"
 
     foreach ($program in $adware) {
         winget uninstall --accept-source-agreements --source winget $program
