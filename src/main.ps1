@@ -26,7 +26,7 @@ Write-Progress -Activity "Installing Package managers" -Status "1% Complete:" -P
   # Add-AppPackage "src/Microsoft.VCLibs.140.00_14.0.33519.0_x64.Appx"
   # Add-AppPackage "src/Microsoft.DesktopAppInstaller.msixbundle"
 
-}
+# }
 Start-Sleep 1
 if(-not (Get-Command "winget" -errorAction SilentlyContinue)){
   $null=[System.Windows.Forms.Messagebox]::Show("Failure to install Winget. Please update the `"App-Installer`" package from the Microsoft Store manually")
