@@ -1,0 +1,68 @@
+{
+  "logging": {
+    "enabled": true,
+    "logPath": "C:\\Logs\\PSScriptSetup",
+    "logLevel": "Info"
+  },
+  "deployment": {
+    "business": {
+      "name": "Business",
+      "packages": ["vlc", "firefox", "googlechrome", "7zip", "adobereader"],
+      "installOffice": false,
+      "installOracle": false,
+      "branded": true
+    },
+    "business_it": {
+      "name": "Business IT",
+      "packages": ["vlc", "firefox", "googlechrome", "7zip", "adobereader"],
+      "installOffice": false,
+      "installOracle": false,
+      "branded": true
+    },
+    "consumer": {
+      "name": "Consumer",
+      "packages": ["vlc", "firefox", "googlechrome", "7zip", "adobereader", "libreoffice", "paint.net"],
+      "installOffice": false,
+      "installOracle": false,
+      "branded": true
+    },
+    "consumer_it": {
+      "name": "Consumer IT",
+      "packages": ["vlc", "firefox", "googlechrome", "7zip", "adobereader", "libreoffice", "paint.net"],
+      "installOffice": false,
+      "installOracle": false,
+      "branded": true
+    },
+    "unbranded": {
+      "name": "Unbranded",
+      "packages": ["vlc", "firefox", "googlechrome", "7zip", "paint.net"],
+      "installOffice": false,
+      "installOracle": false,
+      "branded": false
+    }
+  },
+  "paths": {
+    "installFolder": "C:\\Install",
+    "startMenuPath": "%LOCALAPPDATA%/Packages/Microsoft.Windows.StartMenuExperienceHost_cw5n1h2txyewy/LocalState",
+    "logoPath": "src/oemlogo.bmp",
+    "helpDeskExe": "src/Netixx Helpdesk.exe"
+  },
+  "windows": {
+    "deleteUnwantedShortcuts": true,
+    "shortcuts": [
+      "C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\Angebote.lnk",
+      "C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\Firefox Privater Modus.lnk",
+      "C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\Amazon.com.lnk",
+      "C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\HP Documentation.lnk",
+      "C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\HP Sure Click Pro Secure Browser.lnk",
+      "C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\TCO Certified.lnk",
+      "C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\Booking.lnk",
+      "C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\LastPass.lnk"
+    ]
+  },
+  "validation": {
+    "requireInternet": true,
+    "requireAdmin": true,
+    "minDiskSpace": 5000000000
+  }
+}

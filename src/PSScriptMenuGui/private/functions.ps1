@@ -13,41 +13,30 @@ function Hide-Console {
     [Console.Window]::ShowWindow($consolePtr, 0) # 0 = hide
 }
 
-Function New-GuiHeading {
+Function Get-VisualChildren {
+    <#
+    .SYNOPSIS
+        Recursively find all visual children of a given type in a WPF control tree
+    #>
     param(
-        [Parameter(Mandatory)][string]$name
+        [Parameter(Mandatory)][System.Windows.DependencyObject]$parent,
+        [Parameter(Mandatory)][type]$childType
     )
-    $string = Get-Content "$moduleRoot\xaml\heading.xaml"
-    $string = $string.Replace('INSERT_SECTION_HEADING',(Get-XamlSafeString $name) )
-    $string = $string.Replace('INSERT_ROW',$row)
-    $script:row++
-
-    return $string
-}
-
-Function New-GuiRow {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)][PSCustomObject]$item
-    )
-    Write-Verbose $item
-
-    $string = Get-Content "$moduleRoot\xaml\item.xaml"
-    $string = $string.Replace('INSERT_BACKGROUND_COLOR',$buttonBackgroundColor)
-    $string = $string.Replace('INSERT_FOREGROUND_COLOR',$buttonForegroundColor)
-    $string = $string.Replace('INSERT_BUTTON_TEXT',(Get-XamlSafeString $item.Name) )
-    # Description is optional
-    if ($item.Description) {
-        $string = $string.Replace('INSERT_DESCRIPTION',(Get-XamlSafeString $item.Description) )
+    
+    $children = @()
+    
+    for ($i = 0; $i -lt [System.Windows.Media.VisualTreeHelper]::GetChildrenCount($parent); $i++) {
+        $child = [System.Windows.Media.VisualTreeHelper]::GetChild($parent, $i)
+        
+        if ($child -is $childType) {
+            $children += $child
+        }
+        
+        # Recursively search child's children
+        $children += Get-VisualChildren -parent $child -childType $childType
     }
-    else {
-        $string = $string.Replace('INSERT_DESCRIPTION','')
-    }
-    $string = $string.Replace('INSERT_BUTTON_NAME',$item.Reference)
-    $string = $string.Replace('INSERT_ROW',$row)
-    $script:row++
-
-    return $string
+    
+    return $children
 }
 
 Function Get-XamlSafeString {
@@ -66,14 +55,11 @@ Function Get-XamlSafeString {
 Function New-GuiForm {
     # Based on: https://foxdeploy.com/2015/05/14/part-iii-using-advanced-gui-elements-in-powershell/
     param (
-        [Parameter(Mandatory)][array]$inputXml # XML has not been converted to object yet
+        [Parameter(Mandatory)][string]$inputXml # XAML as string
     )
-    # Process raw XML
-    $inputXML = $inputXML -replace 'mc:Ignorable="d"','' -replace "x:N",'N' -replace '^<Win.*','<Window'
-
     # Read XAML
     [void][System.Reflection.Assembly]::LoadWithPartialName('presentationframework')
-    [xml]$xaml = $inputXML
+    [xml]$xaml = $inputXml
     $reader = (New-Object System.Xml.XmlNodeReader $xaml)
     try {
         $form = [Windows.Markup.XamlReader]::Load($reader)
@@ -83,17 +69,6 @@ Function New-GuiForm {
 Ensure that there are NO SelectionChanged or TextChanged properties in your textboxes (PowerShell cannot process them).
 Note that this module does not currently work with PowerShell 7-preview and the VS Code integrated console."
         throw
-    }
-
-    # Load XAML button objects in PowerShell
-    $script:buttons = @()
-    $xaml.SelectNodes("//*[@Name]") | ForEach-Object {
-        try {
-            $script:buttons += $Form.FindName($_.Name)
-        }
-        catch {
-            throw
-        }
     }
 
     return $form
@@ -106,7 +81,7 @@ Function Invoke-ButtonAction {
     Write-Verbose "$buttonName clicked"
 
     # Get relevant CSV row
-    $csvMatch = $csvData | Where-Object {$_.Reference -eq $buttonName}
+    $csvMatch = $script:csvData | Where-Object {$_.Reference -eq $buttonName}
     Write-Verbose $csvMatch
 
     # Pipe match to Start-Script function

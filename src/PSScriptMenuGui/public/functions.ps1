@@ -67,64 +67,61 @@ Function Show-ScriptMenuGui {
     $csvData = Import-CSV -Path $csvPath -ErrorAction Stop
     Write-Verbose "Got $($csvData.Count) CSV rows"
 
+    # Store CSV data in script scope so it's accessible to button click handlers
+    $script:csvData = $csvData
+
     # Add unique Reference to each item
-    # Used as x:Name of button and to look up action on click
+    # Used as button Tag and to look up action on click
     $i = 0
     $csvData | ForEach-Object {
         $_ | Add-Member -Name Reference -MemberType NoteProperty -Value "button$i"
         $i++
     }
 
-    # Begin constructing XAML
-    $xaml = Get-Content "$moduleRoot\xaml\start.xaml"
-    $xaml = $xaml.Replace('INSERT_WINDOW_TITLE',$windowTitle)
-    if ($iconPath) {
-        # TODO: change taskbar icon?
-        # WPF wants the absolute path
-        $iconPath = (Resolve-Path $iconPath).Path
-        $xaml = $xaml.Replace('INSERT_ICON_PATH',$iconPath)
-    }
-    else {
-        # No icon specified
-        $xaml = $xaml.Replace('Icon="INSERT_ICON_PATH" ','')
-    }
-
-    # Add CSV data to XAML
-    # Row counter
-    $script:row = 0
-    # Not using Group-Object as PS7-preview4 does not preserve original order
-    $sections = $csvData.Section | Where-Object {-not [string]::IsNullOrEmpty($_) } | Get-Unique
-    # Generate GUI rows
-    ForEach ($section in $sections) {
-        Write-Verbose "Adding GUI Section: $section..."
-        # Section Heading
-        $xaml += New-GuiHeading $section
-        $csvData | Where-Object {$_.Section -eq $section} | ForEach-Object {
-            # Add items
-            $xaml += New-GuiRow $_
-        }
-    }
-    Write-Verbose 'Adding any items with blank Section...'
-    $csvData | Where-Object { [string]::IsNullOrEmpty($_.Section) } | ForEach-Object {
-        $xaml += New-GuiRow $_
-        # TODO: spacing at top of window is untidy with no Sections (minor)
-    }
-    Write-Verbose "Added $($row) GUI rows"
-
-    # Finish constructing XAML
-    $xaml += Get-Content "$moduleRoot\xaml\end.xaml"
+    # Build complete XAML from template files
+    $xamlStart = Get-Content "$moduleRoot\xaml\start.xaml" -Raw
+    $xamlEnd = Get-Content "$moduleRoot\xaml\end.xaml" -Raw
+    $xaml = $xamlStart + $xamlEnd
 
     Write-Verbose 'Creating XAML objects...'
     $form = New-GuiForm -inputXml $xaml
 
-    Write-Verbose "Found $($buttons.Count) buttons"
+    # Create data context object
+    $dataContext = New-Object PSObject -Property @{
+        WindowTitle = $windowTitle
+        IconPath = if ($iconPath) { (Resolve-Path $iconPath).Path } else { $null }
+        MenuItems = @()
+    }
+    
+    # Build menu items with proper formatting
+    ForEach ($item in $csvData) {
+        $menuItem = New-Object PSObject -Property @{
+            Reference = $item.Reference
+            ButtonText = Get-XamlSafeString $item.Name
+            Description = if ($item.Description) { Get-XamlSafeString $item.Description } else { '' }
+            BackgroundColor = $buttonBackgroundColor
+            ForegroundColor = $buttonForegroundColor
+            OriginalData = $item  # Store original CSV data for action lookup
+        }
+        $dataContext.MenuItems += $menuItem
+    }
+
+    # Set DataContext for binding
+    $form.DataContext = $dataContext
+
+    Write-Verbose "Created $($dataContext.MenuItems.Count) menu items"
+
+    # Find all buttons and attach click handlers
     Write-Verbose 'Adding click actions...'
-    ForEach ($button in $buttons) {
-        $button.Add_Click( {
-            # Use object in pipeline to identify script to run
-            Invoke-ButtonAction $_.Source.Name
+    $buttons = @()
+    Get-VisualChildren -parent $form -childType ([System.Windows.Controls.Button]) | ForEach-Object {
+        $buttons += $_
+        $_.Add_Click( {
+            Invoke-ButtonAction $_.Tag
         } )
     }
+    
+    Write-Verbose "Attached click handlers to $($buttons.Count) buttons"
 
     if ($hideConsole) {
         if ($global:error[0].Exception.CommandInvocation.MyCommand.ModuleName -ne 'PSScriptMenuGui') {
