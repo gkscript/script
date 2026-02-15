@@ -129,9 +129,10 @@ Function Start-Script {
     $psArguments = @()
     $psArguments += '-ExecutionPolicy Bypass'
     $psArguments += '-NoLogo'
-    if ($noExit) {
-        # Global -NoExit switch
-        $psArguments += '-NoExit'
+    $psArguments += '-NoExit'  # Always keep window open so user can see output
+    if ($script:noExit -or $noExit) {
+        # Additional handling for global -NoExit switch parameter
+        # (already added above by default)
     }
     if ($arguments) {
         # Additional PS arguments from CSV

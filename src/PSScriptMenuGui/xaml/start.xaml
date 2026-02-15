@@ -1,43 +1,120 @@
-<Window x:Class="WpfApp.MainWindow"
-        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d"
         Title="{Binding WindowTitle}" Icon="{Binding IconPath}"
-        Height="Auto" Width="Auto" MaxHeight="800" MinHeight="200" MaxWidth="600"
-        SizeToContent="WidthAndHeight" WindowStartupLocation="CenterScreen">
-    <ScrollViewer Padding="10,0,10,10" VerticalScrollBarVisibility="Auto">
-        <ItemsControl ItemsSource="{Binding MenuItems}">
-            <ItemsControl.ItemsPanel>
-                <ItemsPanelTemplate>
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="150"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                    </Grid>
-                </ItemsPanelTemplate>
-            </ItemsControl.ItemsPanel>
-            <ItemsControl.ItemTemplate>
-                <DataTemplate>
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="150"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <Button Grid.Column="0" 
-                                Content="{Binding ButtonText}"
-                                Background="{Binding BackgroundColor}"
-                                Foreground="{Binding ForegroundColor}"
-                                MinHeight="50" VerticalAlignment="Top" Padding="10" Margin="0,5,0,5"
-                                Tag="{Binding Reference}"/>
-                        <TextBlock Grid.Column="1" 
-                                   Text="{Binding Description}"
-                                   TextWrapping="Wrap" Padding="10,5,0,5" VerticalAlignment="Center"/>
-                    </Grid>
-                </DataTemplate>
-            </ItemsControl.ItemTemplate>
-        </ItemsControl>
-    </ScrollViewer>
+        Height="Auto" Width="380" MaxHeight="800" MinHeight="200"
+        ResizeMode="NoResize" SizeToContent="Height" WindowStartupLocation="CenterScreen">
+    <Window.Resources>
+        <DropShadowEffect x:Key="ButtonShadow" BlurRadius="6" ShadowDepth="3" Opacity="0.4" Direction="315"/>
+        <Style TargetType="Button">
+            <Setter Property="OverridesDefaultStyle" Value="True"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+    <DockPanel LastChildFill="True">
+        <!-- Footer -->
+        <Border DockPanel.Dock="Bottom" 
+                Background="#F5F5F5"
+                BorderThickness="0,1,0,0"
+                BorderBrush="#E0E0E0">
+            <StackPanel Orientation="Vertical" Margin="0" VerticalAlignment="Center" HorizontalAlignment="Center">
+                <TextBlock Text="Created for the people by"
+                           Foreground="#555555"
+                           FontSize="11"
+                           FontWeight="SemiBold"
+                           Padding="10,12,10,2"
+                           TextAlignment="Center"/>
+                <TextBlock Text="www.netixx.it"
+                           Foreground="#366EE8"
+                           FontSize="11"
+                           FontWeight="SemiBold"
+                           Padding="10,0,10,12"
+                           TextAlignment="Center"
+                           TextDecorations="Underline"/>
+            </StackPanel>
+        </Border>
+        
+        <!-- Content -->
+        <ScrollViewer Padding="0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Orientation="Vertical" HorizontalAlignment="Center" Margin="15,20,15,20">
+                <ItemsControl ItemsSource="{Binding MenuItems}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Vertical" HorizontalAlignment="Center"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border CornerRadius="10" 
+                                    Margin="0,6,0,6"
+                                    x:Name="ButtonBorder">
+                                <Border.Background>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                        <GradientStop Color="#4A7FEB" Offset="0"/>
+                                        <GradientStop Color="#2952B3" Offset="1"/>
+                                    </LinearGradientBrush>
+                                </Border.Background>
+                                <Border.Effect>
+                                    <DropShadowEffect x:Name="ButtonShadowEffect" BlurRadius="6" ShadowDepth="3" Opacity="0.4" Direction="315"/>
+                                </Border.Effect>
+                                <Border.Triggers>
+                                    <EventTrigger RoutedEvent="MouseEnter">
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <ColorAnimation Storyboard.TargetName="ButtonBorder"
+                                                                Storyboard.TargetProperty="Background.GradientStops[0].Color"
+                                                                To="#5B8EF5"
+                                                                Duration="0:0:0.15"/>
+                                                <ColorAnimation Storyboard.TargetName="ButtonBorder"
+                                                                Storyboard.TargetProperty="Background.GradientStops[1].Color"
+                                                                To="#3A62C8"
+                                                                Duration="0:0:0.15"/>
+                                                <DoubleAnimation Storyboard.TargetName="ButtonShadowEffect"
+                                                                 Storyboard.TargetProperty="Opacity"
+                                                                 To="0.6"
+                                                                 Duration="0:0:0.15"/>
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </EventTrigger>
+                                    <EventTrigger RoutedEvent="MouseLeave">
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <ColorAnimation Storyboard.TargetName="ButtonBorder"
+                                                                Storyboard.TargetProperty="Background.GradientStops[0].Color"
+                                                                To="#4A7FEB"
+                                                                Duration="0:0:0.15"/>
+                                                <ColorAnimation Storyboard.TargetName="ButtonBorder"
+                                                                Storyboard.TargetProperty="Background.GradientStops[1].Color"
+                                                                To="#2952B3"
+                                                                Duration="0:0:0.15"/>
+                                                <DoubleAnimation Storyboard.TargetName="ButtonShadowEffect"
+                                                                 Storyboard.TargetProperty="Opacity"
+                                                                 To="0.4"
+                                                                 Duration="0:0:0.15"/>
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </EventTrigger>
+                                </Border.Triggers>
+                                <Button Content="{Binding ButtonText}"
+                                        Background="Transparent"
+                                        Foreground="{Binding ForegroundColor}"
+                                        MinHeight="56" MinWidth="200" Padding="15,0,15,0"
+                                        BorderThickness="0"
+                                        FontSize="14"
+                                        FontWeight="SemiBold"
+                                        FontFamily="Segoe UI"
+                                        Cursor="Hand"
+                                        Tag="{Binding Reference}"/>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
 </Window>

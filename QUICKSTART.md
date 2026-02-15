@@ -20,7 +20,6 @@ cd src
 - `business_it` - IT computer  
 - `consumer` - Home user
 - `consumer_it` - Home with extras
-- `unbranded` - No company branding
 
 ### Step 3: Check Logs
 ```powershell
