@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory)]
-    [ValidateSet('business', 'business_it', 'consumer', 'consumer_it', 'unbranded')]
+    [ValidateSet('business', 'business_it', 'consumer', 'consumer_it')]
     [string]$DeploymentType,
     
     [Parameter()]
@@ -27,8 +27,25 @@ Write-Log "Config Path: $ConfigPath"
 
 # Load configuration
 try {
-    $script:config = Get-Content $ConfigPath -Raw | ConvertFrom-Json
+    $configObject = Get-Content $ConfigPath -Raw | ConvertFrom-Json
+    
+    # Convert to hashtable for proper key access
+    $script:config = @{}
+    $configObject.PSObject.Properties | ForEach-Object {
+        if ($_.Value -is [PSCustomObject]) {
+            # Convert nested objects to hashtables
+            $nestedHash = @{}
+            $_.Value.PSObject.Properties | ForEach-Object {
+                $nestedHash[$_.Name] = $_.Value
+            }
+            $script:config[$_.Name] = $nestedHash
+        } else {
+            $script:config[$_.Name] = $_.Value
+        }
+    }
+    
     Write-Log "Configuration loaded successfully"
+    Write-Log "Available deployment types: $($script:config.deployment.Keys -join ', ')"
 }
 catch {
     Write-Log "Failed to load configuration: $_" -Level Error
@@ -206,17 +223,37 @@ Function Apply-RegistrySettings {
         
         # Set individual registry values
         foreach ($path in $RegistryValues.Keys) {
-            $valueName = $RegistryValues[$path].Name
-            $value = $RegistryValues[$path].Value
-            $type = $RegistryValues[$path].Type
+            $values = $RegistryValues[$path]
             
-            Write-Log "  Setting: $path\$valueName = $value"
-            
-            try {
-                Set-ItemProperty -Path $path -Name $valueName -Value $value -Type $type -Force
-            }
-            catch {
-                Write-Log "    Failed to set registry value: $_" -Level Warning
+            # Handle both single hash and array of hashes
+            if ($values -is [array]) {
+                foreach ($item in $values) {
+                    $valueName = $item.Name
+                    $value = $item.Value
+                    $type = $item.Type
+                    
+                    Write-Log "  Setting: $path\$valueName = $value"
+                    
+                    try {
+                        Set-ItemProperty -Path $path -Name $valueName -Value $value -Type $type -Force
+                    }
+                    catch {
+                        Write-Log "    Failed to set registry value: $_" -Level Warning
+                    }
+                }
+            } else {
+                $valueName = $values.Name
+                $value = $values.Value
+                $type = $values.Type
+                
+                Write-Log "  Setting: $path\$valueName = $value"
+                
+                try {
+                    Set-ItemProperty -Path $path -Name $valueName -Value $value -Type $type -Force
+                }
+                catch {
+                    Write-Log "    Failed to set registry value: $_" -Level Warning
+                }
             }
         }
         
@@ -348,16 +385,18 @@ try {
     $registryFiles += "src/icons.reg"
     
     $registryValues = @{
-        'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize' = @{
-            Name = 'SystemUsesLightTheme'
-            Value = 0
-            Type = 'DWord'
-        }
-        'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize' = @{
-            Name = 'AppsUseLightTheme'
-            Value = 1
-            Type = 'DWord'
-        }
+        'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize' = @(
+            @{
+                Name = 'SystemUsesLightTheme'
+                Value = 0
+                Type = 'DWord'
+            },
+            @{
+                Name = 'AppsUseLightTheme'
+                Value = 1
+                Type = 'DWord'
+            }
+        )
     }
     
     Apply-RegistrySettings -RegistryFiles $registryFiles -RegistryValues $registryValues

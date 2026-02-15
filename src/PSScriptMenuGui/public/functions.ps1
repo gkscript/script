@@ -46,14 +46,21 @@ Function Show-ScriptMenuGui {
     [CmdletBinding()]
     param(
         [string][Parameter(Mandatory)]$csvPath,
-        [string]$windowTitle = 'PowerShell Script Menu',
+        [string]$windowTitle = 'Netixx Grundkonfiguration',
         [string]$buttonForegroundColor = 'White',
         [string]$buttonBackgroundColor = '#366EE8',
-        [string]$iconPath,
+        [string]$iconPath = './src/netixx.ico',
         [switch]$hideConsole,
         [switch]$noExit
     )
     Write-Verbose 'Show-ScriptMenuGui started'
+
+    # Read version and append to window title
+    $versionPath = Join-Path (Split-Path $csvPath -Parent) 'version.txt'
+    if (Test-Path $versionPath) {
+        $version = Get-Content $versionPath | Select-Object -First 1
+        $windowTitle = "$windowTitle (v$version)"
+    }
 
     # -Verbose value, to pass to select cmdlets
     $verbose = $false
@@ -69,6 +76,9 @@ Function Show-ScriptMenuGui {
 
     # Store CSV data in script scope so it's accessible to button click handlers
     $script:csvData = $csvData
+    
+    # Store noExit flag in script scope
+    $script:noExit = $noExit
 
     # Add unique Reference to each item
     # Used as button Tag and to look up action on click
@@ -111,17 +121,34 @@ Function Show-ScriptMenuGui {
 
     Write-Verbose "Created $($dataContext.MenuItems.Count) menu items"
 
-    # Find all buttons and attach click handlers
-    Write-Verbose 'Adding click actions...'
-    $buttons = @()
-    Get-VisualChildren -parent $form -childType ([System.Windows.Controls.Button]) | ForEach-Object {
-        $buttons += $_
-        $_.Add_Click( {
-            Invoke-ButtonAction $_.Tag
-        } )
-    }
-    
-    Write-Verbose "Attached click handlers to $($buttons.Count) buttons"
+    # Attach click handlers after window is loaded
+    $form.Add_Loaded( {
+        Write-Verbose 'Window loaded, adding click actions...'
+        
+        # Force layout update and wait on dispatcher to ensure all rendering is complete
+        [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke({
+            $this.UpdateLayout()
+            [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke({
+                Start-Sleep -Milliseconds 300
+                $this.UpdateLayout()
+            }, [System.Windows.Threading.DispatcherPriority]::Render)
+        }, [System.Windows.Threading.DispatcherPriority]::Render)
+        
+        $buttons = Get-VisualChildren -parent $this -childType ([System.Windows.Controls.Button])
+        
+        ForEach ($button in $buttons) {
+            $button.Add_Click( {
+                param($sender, $eventArgs)
+                Write-Verbose "Button clicked with tag: $($sender.Tag)"
+                if ($sender.Tag) {
+                    Invoke-ButtonAction $sender.Tag
+                } else {
+                    Write-Error "Button Tag is empty!"
+                }
+            } )
+        }
+        Write-Verbose "Attached click handlers to $($buttons.Count) buttons"
+    } )
 
     if ($hideConsole) {
         if ($global:error[0].Exception.CommandInvocation.MyCommand.ModuleName -ne 'PSScriptMenuGui') {

@@ -31,7 +31,7 @@ function Test-Configuration {
         Write-Host "✅ Configuration structure is valid" -ForegroundColor Green
         
         # Validate deployment types
-        $requiredTypes = @('business', 'business_it', 'consumer', 'consumer_it', 'unbranded')
+        $requiredTypes = @('business', 'business_it', 'consumer', 'consumer_it')
         foreach ($type in $requiredTypes) {
             if (-not $config.deployment.$type) {
                 throw "Missing deployment type: $type"

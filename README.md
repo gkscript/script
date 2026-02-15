@@ -7,7 +7,7 @@ A comprehensive Windows setup and customization tool with a graphical script men
 ### Setup Script (`main.ps1`)
 - **Automated Windows Configuration**: Installs software packages, applies registry tweaks, removes bloatware
 - **Pre-flight Validation**: Checks admin rights, internet connectivity, disk space, and Windows version
-- **Multiple Deployment Types**: Business, Consumer, IT, Unbranded configurations
+- **Multiple Deployment Types**: Business, Consumer, IT configurations
 - **Comprehensive Logging**: All operations logged to `C:\Logs\PSScriptSetup\`
 - **GPU Support**: Detects and installs NVIDIA drivers if available
 - **BitLocker Management**: Safely handles encrypted drives
@@ -58,7 +58,7 @@ Choose one based on your needs:
 | `business_it` | Same as business | No | Yes |
 | `consumer` | business + LibreOffice, Paint.NET | No | Yes |
 | `consumer_it` | consumer packages | No | Yes |
-| `unbranded` | VLC, Firefox, Chrome, 7zip, Paint.NET | No | No |
+
 
 ## Usage
 
@@ -80,7 +80,7 @@ Choose one based on your needs:
 ```
 
 #### Parameters
-- **DeploymentType** (Required): One of `business`, `business_it`, `consumer`, `consumer_it`, `unbranded`
+- **DeploymentType** (Required): One of `business`, `business_it`, `consumer`, `consumer_it`
 - **SkipBloatwareRemoval**: Skip removal of unwanted shortcuts and desktop icons
 - **SkipHideConsole**: Keep PowerShell console visible during execution
 - **ConfigPath**: Custom path to `config.json`

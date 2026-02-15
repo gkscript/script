@@ -12,7 +12,7 @@
 #### 1. Configuration Management ✅
 **File**: `src/config.json`
 - Centralized JSON configuration
-- 5 deployment types defined (business, consumer, IT, unbranded)
+- 4 deployment types defined (business, consumer, IT)
 - Logging, paths, and validation settings
 - No more hardcoded values in scripts
 

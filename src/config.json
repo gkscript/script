@@ -13,7 +13,7 @@
       "branded": true
     },
     "business_it": {
-      "name": "Business IT",
+      "name": "Business ITA",
       "packages": ["vlc", "firefox", "googlechrome", "7zip", "adobereader"],
       "installOffice": false,
       "installOracle": false,
@@ -27,18 +27,11 @@
       "branded": true
     },
     "consumer_it": {
-      "name": "Consumer IT",
+      "name": "Consumer ITA",
       "packages": ["vlc", "firefox", "googlechrome", "7zip", "adobereader", "libreoffice", "paint.net"],
       "installOffice": false,
       "installOracle": false,
       "branded": true
-    },
-    "unbranded": {
-      "name": "Unbranded",
-      "packages": ["vlc", "firefox", "googlechrome", "7zip", "paint.net"],
-      "installOffice": false,
-      "installOracle": false,
-      "branded": false
     }
   },
   "paths": {
