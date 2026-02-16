@@ -12,22 +12,8 @@
       "installOracle": false,
       "branded": true
     },
-    "business_it": {
-      "name": "Business ITA",
-      "packages": ["vlc", "firefox", "googlechrome", "7zip", "adobereader"],
-      "installOffice": false,
-      "installOracle": false,
-      "branded": true
-    },
     "consumer": {
       "name": "Consumer",
-      "packages": ["vlc", "firefox", "googlechrome", "7zip", "adobereader", "libreoffice", "paint.net"],
-      "installOffice": false,
-      "installOracle": false,
-      "branded": true
-    },
-    "consumer_it": {
-      "name": "Consumer ITA",
       "packages": ["vlc", "firefox", "googlechrome", "7zip", "adobereader", "libreoffice", "paint.net"],
       "installOffice": false,
       "installOracle": false,

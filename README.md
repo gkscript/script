@@ -55,9 +55,7 @@ Choose one based on your needs:
 | Type | Packages | Office | Branded |
 |------|----------|--------|---------|
 | `business` | VLC, Firefox, Chrome, 7zip, Adobe Reader | No | Yes |
-| `business_it` | Same as business | No | Yes |
 | `consumer` | business + LibreOffice, Paint.NET | No | Yes |
-| `consumer_it` | consumer packages | No | Yes |
 
 
 ## Usage
@@ -80,7 +78,7 @@ Choose one based on your needs:
 ```
 
 #### Parameters
-- **DeploymentType** (Required): One of `business`, `business_it`, `consumer`, `consumer_it`
+- **DeploymentType** (Required): One of `business`, `consumer`
 - **SkipBloatwareRemoval**: Skip removal of unwanted shortcuts and desktop icons
 - **SkipHideConsole**: Keep PowerShell console visible during execution
 - **ConfigPath**: Custom path to `config.json`
