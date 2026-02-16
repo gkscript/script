@@ -109,24 +109,18 @@ This document identifies unnecessary files, redundant code, and optimization opp
 Current configuration in `config.json`:
 ```json
 "business": { "packages": [...], ... }
-"business_it": { "packages": [...], ... }  // ← IDENTICAL packages to "business"
 "consumer": { "packages": [...], ... }
-"consumer_it": { "packages": [...], ... }  // ← IDENTICAL packages to "consumer"
 ```
 
 **Analysis**:
-- `business` and `business_it` have **identical package lists**
-- `consumer` and `consumer_it` have **identical package lists**
-- Only difference: display names end with "ITA"
-- This suggests incomplete migration to new system
+- Redundant `business_it` and `consumer_it` variants have been removed
+- Consolidated to 2 core deployment types: `business` and `consumer`
+- Default system locale is used for installed applications
 
-**Options**:
-1. Remove `business_it` & `consumer_it` if the "ITA" variants are no longer needed
-2. If kept, add actual differences (regional settings, additional software, etc.)
-3. Use a single type with parameters instead
-
-**Risk**: MEDIUM - May be for legacy customer support  
-**Action**: ⚠️ **CLARIFY REQUIREMENT** - Are these actually different deployments?
+**Completed**:
+✅ Removed `business_it` & `consumer_it` from config.json
+✅ Updated parameter validation in main.ps1
+✅ Updated all documentation and test references
 
 ---
 
@@ -261,11 +255,7 @@ if (Test-Path "src/SomeFile.exe") {
 **Estimated Cleanup**: ~1.5 MB space freed
 
 ### Review & Decide (Need Clarification)
-1. **Licensing**: Are 4 deployment types (`business`, `business_it`, `consumer`, `consumer_it`) truly needed?
-   - If "ITA" = Italian variants, add region-specific settings
-   - Otherwise, consider consolidating to 2 core types
-
-2. **Registry Files**: Are `desktop.reg`, `desktop_libreoffice.reg`, `disable_telemetry.reg` reserved for future use?
+1. **Registry Files**: Are `desktop.reg`, `desktop_libreoffice.reg`, `disable_telemetry.reg` reserved for future use?
    - If not, delete them
    - If yes, document their purpose in README
 

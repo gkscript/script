@@ -152,13 +152,14 @@ Function Get-SystemGPU {
             Name = $gpu.Name
             IsNvidia = $gpu.Name -match [regex]::Escape("nvidia")
             IsAmd = $gpu.Name -match [regex]::Escape("amd")
+            IsIntel = $gpu.Name -match [regex]::Escape("intel")
         }
         Write-Log "Detected GPU: $($gpuInfo.Name)"
         return $gpuInfo
     }
     catch {
         Write-Log "Failed to retrieve GPU information: $_" -Level Warning
-        return @{ Name = "Unknown"; IsNvidia = $false; IsAmd = $false }
+        return @{ Name = "Unknown"; IsNvidia = $false; IsAmd = $false; IsIntel = $false }
     }
 }
 

@@ -17,9 +17,7 @@ cd src
 
 **Choose your type:**
 - `business` - Office computer
-- `business_it` - IT computer  
 - `consumer` - Home user
-- `consumer_it` - Home with extras
 
 ### Step 3: Check Logs
 ```powershell

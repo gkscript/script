@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory)]
-    [ValidateSet('business', 'business_it', 'consumer', 'consumer_it')]
+    [ValidateSet('business', 'consumer')]
     [string]$DeploymentType,
     
     [Parameter()]
@@ -374,6 +374,14 @@ try {
     if ($gpuInfo.IsNvidia) {
         Write-Log "Step 3a: Installing NVIDIA drivers (30%)" -Level Success
         Install-Packages -PackageList @('nvidia-app') -Manager chocolatey
+    }
+    elseif ($gpuInfo.IsAmd) {
+        Write-Log "Step 3a: Installing AMD drivers (30%)" -Level Success
+        Install-Packages -PackageList @('amd-radeon-software') -Manager chocolatey
+    }
+    elseif ($gpuInfo.IsIntel) {
+        Write-Log "Step 3a: Installing Intel Graphics drivers (30%)" -Level Success
+        Install-Packages -PackageList @('intel-graphics-driver') -Manager chocolatey
     }
     
     # Step 4: Apply registry settings
