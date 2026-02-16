@@ -5,16 +5,6 @@
         ResizeMode="NoResize" SizeToContent="Height" WindowStartupLocation="CenterScreen">
     <Window.Resources>
         <DropShadowEffect x:Key="ButtonShadow" BlurRadius="6" ShadowDepth="3" Opacity="0.4" Direction="315"/>
-        <Style TargetType="Button">
-            <Setter Property="OverridesDefaultStyle" Value="True"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
     </Window.Resources>
     <DockPanel LastChildFill="True">
         <!-- Footer -->
