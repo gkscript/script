@@ -338,7 +338,7 @@ Function Enable-DynamicTheme {
     Write-Log "Installing Dynamic Theme..."
     
     try {
-        winget install --accept-package-agreements --accept-source-agreements --source msstore "dynamic theme"
+        winget install --accept-package-agreements --accept-source-agreements --silent --source msstore "dynamic theme"
         
         # Create desktop shortcut
         $targetPath = "shell:AppsFolder\55888ChristopheLavalle.DynamicTheme_jdggxwd41xcr0!App"
@@ -381,7 +381,19 @@ try {
     }
     elseif ($gpuInfo.IsIntel) {
         Write-Log "Step 3a: Installing Intel Graphics drivers (30%)" -Level Success
-        Install-Packages -PackageList @('intel-graphics-driver') -Manager chocolatey
+        try {
+            # Chocolatey's intel-graphics-driver package downloads from Intel's CDN which often returns 403.
+            # Use winget instead, which resolves directly via the official Intel store entry.
+            winget install --id Intel.GraphicsCommand --silent --accept-package-agreements --accept-source-agreements
+            if ($LASTEXITCODE -ne 0) {
+                Write-Log "Intel Graphics driver install returned exit code $LASTEXITCODE" -Level Warning
+            } else {
+                Write-Log "Intel Graphics driver installed" -Level Success
+            }
+        }
+        catch {
+            Write-Log "Intel Graphics driver installation failed: $_" -Level Warning
+        }
     }
     
     # Step 4: Apply registry settings
@@ -488,21 +500,37 @@ try {
         }
     }
     
-    # Final: Restart Explorer
+    Write-Log "=== Setup Completed Successfully ===" -Level Success
+    Write-Log "Log file: $($script:LogFile)"
+
+    [System.Windows.Forms.MessageBox]::Show("Setup completed successfully!`nLog file: $($script:LogFile)", "Setup Complete", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information) | Out-Null
+
+    # Final: Stop Explorer, write icon layout to registry, then restart Explorer.
+    # The registry write MUST happen while Explorer is dead - otherwise Explorer
+    # overwrites IconLayouts with the current layout on shutdown.
     Write-Log "Finalizing... (98%)" -Level Success
     try {
         Stop-Process -Name explorer -Force -ErrorAction SilentlyContinue
         Start-Sleep -Seconds 1
+
+        $desktopRegFile = if ($deploymentConfig.packages -contains "libreoffice") {
+            "src/desktop_libreoffice.reg"
+        } else {
+            "src/desktop.reg"
+        }
+        if (Test-Path $desktopRegFile) {
+            Write-Log "Applying desktop icon layout ($desktopRegFile)..."
+            Apply-RegistrySettings -RegistryFiles @($desktopRegFile) -RegistryValues @{}
+            Write-Log "Desktop icon layout applied" -Level Success
+        } else {
+            Write-Log "Desktop reg file not found: $desktopRegFile" -Level Warning
+        }
+
         Start-Process explorer.exe
     }
     catch {
         Write-Log "Explorer restart failed: $_" -Level Warning
     }
-    
-    Write-Log "=== Setup Completed Successfully ===" -Level Success
-    Write-Log "Log file: $($script:LogFile)"
-    
-    [System.Windows.Forms.MessageBox]::Show("Setup completed successfully!`nLog file: $($script:LogFile)", "Setup Complete", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information) | Out-Null
 }
 catch {
     Write-Log "=== Setup Failed ===" -Level Error
