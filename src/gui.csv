@@ -1,5 +1,6 @@
 Section,Method,Command,Arguments,Name,Description
 Netixx GK,powershell_inline,.\src\main.ps1 -DeploymentType business,,Business,
 Netixx GK,powershell_inline,.\src\main.ps1 -DeploymentType consumer,,Consumer,
+Netixx GK,powershell_inline,.\src\main.ps1 -DeploymentType consumer-lo,,Consumer -LO,
 
 

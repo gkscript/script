@@ -18,6 +18,13 @@
       "installOffice": false,
       "installOracle": false,
       "branded": true
+    },
+    "consumer-lo": {
+      "name": "Consumer -LO",
+      "packages": ["vlc", "firefox", "googlechrome", "7zip", "adobereader", "paint.net"],
+      "installOffice": false,
+      "installOracle": false,
+      "branded": true
     }
   },
   "paths": {
