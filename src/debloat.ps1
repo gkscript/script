@@ -135,6 +135,7 @@
 
         # Huawei
         "4E6B5B3A.HUAWEIMobileCloud"            # HUAWEI Mobile Cloud
+        "HuaweiPCManager"                       # Huawei PC Manager
 
         # Lenovo
         "E0469640.LenovoSettings"               # Lenovo Settings
