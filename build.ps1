@@ -11,9 +11,16 @@
 
 [CmdletBinding()]
 param(
-    [string]$OutputFile = "$PSScriptRoot\deploy.exe",
+    [string]$OutputFile = "",
     [string]$SevenZipPath = ""
 )
+
+# Derive versioned output filename if not explicitly supplied
+if (-not $OutputFile) {
+    $versionFile = "$PSScriptRoot\src\version.txt"
+    $version = if (Test-Path $versionFile) { (Get-Content $versionFile -Raw).Trim() } else { 'latest' }
+    $OutputFile = "$PSScriptRoot\deploy_v$version.exe"
+}
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -65,7 +72,7 @@ $sfxConfig = @"
 ;!@Install@!UTF-8!
 Title="Netixx Grundkonfiguration"
 BeginPrompt="Setup starten?"
-Directory="%TEMP%\NeatixxSetup"
+Directory="%TEMP%\NetixxSetup"
 RunProgram="launch.bat"
 ;!@InstallEnd@!
 "@
