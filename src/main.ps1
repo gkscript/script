@@ -332,23 +332,30 @@ Function Clean-DesktopIcons {
 Function Enable-DynamicTheme {
     <#
     .SYNOPSIS
-        Install Windows Dynamic Theme from Microsoft Store
+        Install Windows Dynamic Theme from a bundled MSIX package (no Store sign-in required)
     #>
     Write-Log "Installing Dynamic Theme..."
-    
+
+    $msixPath = Join-Path $PSScriptRoot "DynamicTheme.msixbundle"
+
+    if (-not (Test-Path $msixPath)) {
+        Write-Log "Dynamic Theme package not found at '$msixPath'. Skipping." -Level Warning
+        return
+    }
+
     try {
-        winget install --accept-package-agreements --accept-source-agreements --silent --source msstore "dynamic theme"
-        
+        Add-AppxPackage -Path $msixPath -ErrorAction Stop
+
         # Create desktop shortcut
         $targetPath = "shell:AppsFolder\55888ChristopheLavalle.DynamicTheme_jdggxwd41xcr0!App"
         $shortcutFile = "$env:USERPROFILE\Desktop\Dynamic Theme.lnk"
-        
+
         Write-Log "  Creating desktop shortcut"
         $shell = New-Object -ComObject WScript.Shell
         $shortcut = $shell.CreateShortcut($shortcutFile)
         $shortcut.TargetPath = $targetPath
         $shortcut.Save()
-        
+
         Write-Log "Dynamic Theme installed" -Level Success
     }
     catch {
