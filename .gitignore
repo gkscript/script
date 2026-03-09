@@ -1,0 +1,10 @@
+# Build outputs
+deploy*.exe
+
+# Runtime logs
+*.log
+
+# Temp files
+$RECYCLE.BIN/
+Thumbs.db
+desktop.ini

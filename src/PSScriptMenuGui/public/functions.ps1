@@ -74,6 +74,13 @@ Function Show-ScriptMenuGui {
     $csvData = Import-CSV -Path $csvPath -ErrorAction Stop
     Write-Verbose "Got $($csvData.Count) CSV rows"
 
+    # Warn about any file-based entries pointing to missing scripts
+    $csvData | Where-Object { $_.Method -in @('powershell_file', 'pwsh_file') } | ForEach-Object {
+        if (-not (Test-Path $_.Command)) {
+            Write-Warning "CSV entry '$($_.Name)': script not found at '$($_.Command)'"
+        }
+    }
+
     # Store CSV data in script scope so it's accessible to button click handlers
     $script:csvData = $csvData
     

@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory)]
-    [ValidateSet('business', 'consumer')]
+    [ValidateSet('business', 'consumer', 'consumer-lo')]
     [string]$DeploymentType,
     
     [Parameter()]
@@ -19,13 +19,7 @@ $ErrorActionPreference = 'Stop'
 # Import utility functions
 Import-Module "$PSScriptRoot\lib\PSSetupUtility.psm1" -Force
 
-# Initialize
-Initialize-Logging -logPath "C:\Logs\PSScriptSetup"
-Write-Log "=== PSScript Setup Starting ===" -Level Success
-Write-Log "Deployment Type: $DeploymentType"
-Write-Log "Config Path: $ConfigPath"
-
-# Load configuration
+# Load configuration first (to get log path from config)
 try {
     $configObject = Get-Content $ConfigPath -Raw | ConvertFrom-Json
     
@@ -43,14 +37,19 @@ try {
             $script:config[$_.Name] = $_.Value
         }
     }
-    
-    Write-Log "Configuration loaded successfully"
-    Write-Log "Available deployment types: $($script:config.deployment.Keys -join ', ')"
 }
 catch {
-    Write-Log "Failed to load configuration: $_" -Level Error
-    throw
+    Write-Error "Failed to load configuration from '$ConfigPath': $_"
+    exit 1
 }
+
+# Initialize logging using path from config
+Initialize-Logging -logPath $script:config.logging.logPath
+Write-Log "=== PSScript Setup Starting ===" -Level Success
+Write-Log "Deployment Type: $DeploymentType"
+Write-Log "Config Path: $ConfigPath"
+Write-Log "Configuration loaded successfully"
+Write-Log "Available deployment types: $($script:config.deployment.Keys -join ', ')"
 
 # Pre-flight checks
 try {
@@ -177,7 +176,7 @@ Function Install-Packages {
                 
                 foreach ($package in $PackageList) {
                     Write-Log "  Installing: $package"
-                    choco install -y --ignorechecksum $package
+                    choco install -y $package
                     
                     if ($LASTEXITCODE -ne 0) {
                         Write-Log "    Package installation returned exit code $LASTEXITCODE" -Level Warning
