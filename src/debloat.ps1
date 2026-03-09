@@ -132,6 +132,28 @@
 
         # HP
         ""
+
+        # Huawei
+        "4E6B5B3A.HUAWEIMobileCloud"            # HUAWEI Mobile Cloud
+
+        # Lenovo
+        "E0469640.LenovoSettings"               # Lenovo Settings
+        "E0469640.LenovoID"                     # Lenovo ID
+        "E0469640.LenovoExperienceImprovement"  # Lenovo Experience Improvement
+        "E046963F.LenovoCompanion"              # Lenovo Companion
+        "E046963F.LenovoSmartCare"              # Lenovo Smart Care
+
+        # Acer
+        "AcerIncorporated.AcerCollection*"      # Acer Collection
+        "AcerIncorporated.AcerPortal"           # Acer Portal
+        "AcerIncorporated.QuickAccess"          # Acer Quick Access
+        "AcerIncorporated.UserExperienceProgram" # Acer User Experience Program
+
+        # Asus
+        "B9EACED6.AsusROGLiveService"           # Asus ROG Live Service
+        "ASUSTeK.GamingCenterService"           # Asus Gaming Center
+        "ASUSTeK.ZenUIStoreROG"                 # Asus ZenUI Store
+        "*AsusUpdate*"                          # Asus Update
     )
 
     $SocialMediaApps = @(
