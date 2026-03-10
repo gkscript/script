@@ -9,7 +9,7 @@ A comprehensive Windows setup and customization tool with a graphical script men
 - **Pre-flight Validation**: Checks admin rights, internet connectivity, disk space, and Windows version
 - **Multiple Deployment Types**: Business, Consumer, IT configurations
 - **Comprehensive Logging**: All operations logged to `C:\Logs\PSScriptSetup\`
-- **GPU Support**: Detects and installs NVIDIA drivers if available
+- **GPU Support**: Detects and installs NVIDIA, AMD, or Intel GPU drivers automatically
 - **BitLocker Management**: Safely handles encrypted drives
 - **Error Handling**: Robust error handling with graceful fallbacks
 - **Configuration-Driven**: JSON-based configuration for easy customization
@@ -24,7 +24,7 @@ A comprehensive Windows setup and customization tool with a graphical script men
 
 ## Requirements
 
-- **Windows 10 or Windows 11**
+- **Windows 11**
 - **PowerShell 5.1+** (Desktop Edition recommended, Core 7+ also supported)
 - **Administrator Privileges** (required for setup and system modifications)
 - **Internet Connection** (for package downloads)
@@ -55,8 +55,7 @@ Choose one based on your needs:
 | Type | Packages | Office | Branded |
 |------|----------|--------|---------|
 | `business` | VLC, Firefox, Chrome, 7zip, Adobe Reader | No | Yes |
-| `consumer` | business + LibreOffice, Paint.NET | No | Yes |
-
+| `consumer` | business + LibreOffice, Paint.NET | No | Yes || `consumer-nolo` | business + Paint.NET (no LibreOffice) | No | Yes |
 
 ## Usage
 
@@ -78,7 +77,7 @@ Choose one based on your needs:
 ```
 
 #### Parameters
-- **DeploymentType** (Required): One of `business`, `consumer`
+- **DeploymentType** (Required): One of `business`, `consumer`, `consumer-nolo`
 - **SkipBloatwareRemoval**: Skip removal of unwanted shortcuts and desktop icons
 - **SkipHideConsole**: Keep PowerShell console visible during execution
 - **ConfigPath**: Custom path to `config.json`
@@ -89,13 +88,14 @@ Choose one based on your needs:
 3. ✅ Installs Chocolatey package manager
 4. ✅ Installs configured software packages
 5. ✅ Applies registry customizations
-6. ✅ Detects and installs NVIDIA drivers if found
+6. ✅ Detects and installs NVIDIA/AMD/Intel GPU drivers if found
 7. ✅ Removes bloatware and unwanted shortcuts
 8. ✅ Disables BitLocker if encrypted
-9. ✅ Installs Dynamic Theme (Windows 11 only)
+9. ✅ Installs Dynamic Theme
 10. ✅ Uninstalls MS Office
 11. ✅ Sets default file associations
-12. ✅ Logs all operations to `C:\Logs\PSScriptSetup\`
+12. ✅ Applies desktop icon layout (stops Explorer, writes registry, restarts Explorer)
+13. ✅ Logs all operations to `C:\Logs\PSScriptSetup\`
 
 ### PSScriptMenuGui Module
 
@@ -191,28 +191,31 @@ Edit this file to:
 ```
 script/
 ├── README.md                          # This file
-├── launch.bat                         # Quick launcher
+├── build.ps1                          # Builds gk-script.exe (7-Zip SFX)
+├── launch.bat                         # Quick launcher / GUI entry point
 ├── src/
-│   ├── main.ps1                       # Setup script (v2.0 - improved)
-│   ├── main.legacy.ps1                  # Original script (backup)
-│   ├── config.json                    # Configuration file (NEW)
+│   ├── main.ps1                       # Setup script
+│   ├── config.json                    # Deployment configuration
 │   ├── debloat.ps1                    # Remove unwanted Windows features
 │   ├── office.xml                     # Office uninstall configuration
 │   ├── assoc.txt                      # File type associations
 │   ├── whitelist.txt                  # Desktop icons to keep
+│   ├── desktop.reg                    # Desktop icon layout (standard)
+│   ├── desktop_libreoffice.reg        # Desktop icon layout (LibreOffice)
+│   ├── icons.reg                      # Hide/show desktop system icons
+│   ├── DynamicTheme.msixbundle        # Bundled Dynamic Theme package
 │   ├── PSScriptMenuGui/               # WPF Menu Module
-│   │   ├── PSScriptMenuGui.psd1       # Module manifest (UPDATED)
+│   │   ├── PSScriptMenuGui.psd1       # Module manifest
 │   │   ├── PSScriptMenuGui.psm1       # Module implementation
 │   │   ├── public/
-│   │   │   └── functions.ps1          # Public functions (REFACTORED)
+│   │   │   └── functions.ps1          # Public functions
 │   │   ├── private/
-│   │   │   └── functions.ps1          # Private functions (REFACTORED)
+│   │   │   └── functions.ps1          # Private functions
 │   │   └── xaml/
-│   │       ├── start.xaml             # Main window (REFACTORED)
+│   │       ├── start.xaml             # Main window
 │   │       └── end.xaml               # Window closing
 │   └── lib/
-│       └── PSSetupUtility.psm1        # Utility functions (NEW)
-└── .git/                              # Version control
+│       └── PSSetupUtility.psm1        # Shared utility functions
 ```
 
 ## Key Improvements in main.ps1
@@ -245,8 +248,8 @@ script/
 
 ### Compatibility
 - PowerShell 5.1+ compatible
-- Windows 10 & 11 support
-- GPU detection (NVIDIA/AMD)
+- Windows 11
+- GPU detection (NVIDIA, AMD, Intel)
 - BitLocker awareness
 
 ## Logs
@@ -275,9 +278,10 @@ Get-ChildItem C:\Logs\PSScriptSetup\ -Filter "*.log" | Sort-Object LastWriteTime
 - Check CSV file exists and is readable
 - Review logs in `C:\Logs\PSScriptSetup\`
 
-### NVIDIA drivers not installing
+### GPU drivers not installing
 - Verify GPU detection: `Get-CimInstance Win32_VideoController`
-- Chocolatey package may be outdated; update and retry
+- For Intel GPUs, ensure `winget` is available (installed by default on Windows 11)
+- For NVIDIA/AMD, Chocolatey package may be outdated; update and retry
 
 ## Module Documentation
 
