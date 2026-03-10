@@ -15,11 +15,9 @@ param(
     [string]$SevenZipPath = ""
 )
 
-# Derive versioned output filename if not explicitly supplied
+# Derive output filename if not explicitly supplied
 if (-not $OutputFile) {
-    $versionFile = "$PSScriptRoot\src\version.txt"
-    $version = if (Test-Path $versionFile) { (Get-Content $versionFile -Raw).Trim() } else { 'latest' }
-    $OutputFile = "$PSScriptRoot\deploy_v$version.exe"
+    $OutputFile = "$PSScriptRoot\gk-script.exe"
 }
 
 Set-StrictMode -Version Latest

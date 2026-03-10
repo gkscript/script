@@ -19,7 +19,7 @@
       "installOracle": false,
       "branded": true
     },
-    "consumer-lo": {
+    "consumer-nolo": {
       "name": "Consumer -LO",
       "packages": ["vlc", "firefox", "googlechrome", "7zip", "adobereader", "paint.net"],
       "installOffice": false,

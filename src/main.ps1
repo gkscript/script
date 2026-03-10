@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory)]
-    [ValidateSet('business', 'consumer', 'consumer-lo')]
+    [ValidateSet('business', 'consumer', 'consumer-nolo')]
     [string]$DeploymentType,
     
     [Parameter()]
@@ -359,7 +359,9 @@ Function Enable-DynamicTheme {
         Write-Log "Dynamic Theme installed" -Level Success
     }
     catch {
-        Write-Log "Dynamic Theme installation failed: $_" -Level Warning
+        Write-Log "Dynamic Theme installation failed: $_" -Level Error
+        Write-Log "  Exception type: $($_.Exception.GetType().FullName)" -Level Error
+        Write-Log "  Stack trace: $($_.ScriptStackTrace)" -Level Error
     }
 }
 
@@ -516,7 +518,14 @@ try {
     # overwrites IconLayouts with the current layout on shutdown.
     Write-Log "Finalizing... (98%)" -Level Success
     try {
+        # Prevent Windows from auto-restarting Explorer after we kill it
+        $explorerKey = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon'
+        $originalShell = (Get-ItemProperty -Path $explorerKey -Name Shell -ErrorAction SilentlyContinue).Shell
+        Set-ItemProperty -Path $explorerKey -Name Shell -Value '' -Force
+
         Stop-Process -Name explorer -Force -ErrorAction SilentlyContinue
+        # Wait for Explorer to fully terminate before writing the registry
+        Wait-Process -Name explorer -Timeout 15 -ErrorAction SilentlyContinue
         Start-Sleep -Seconds 1
 
         $desktopRegFile = if ($deploymentConfig.packages -contains "libreoffice") {
@@ -532,6 +541,12 @@ try {
             Write-Log "Desktop reg file not found: $desktopRegFile" -Level Warning
         }
 
+        # Restore shell value so Explorer starts normally and reads the new layout
+        if ($originalShell) {
+            Set-ItemProperty -Path $explorerKey -Name Shell -Value $originalShell -Force
+        } else {
+            Set-ItemProperty -Path $explorerKey -Name Shell -Value 'explorer.exe' -Force
+        }
         Start-Process explorer.exe
     }
     catch {
