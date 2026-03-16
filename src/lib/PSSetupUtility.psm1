@@ -90,6 +90,36 @@ Function Test-PrerequisiteInternet {
     }
 }
 
+Function Sync-SystemTimeWithInternet {
+    <#
+    .SYNOPSIS
+        Sync local system time using Windows Time service
+    #>
+    Write-Log "Synchronizing system time with internet time source..."
+
+    try {
+        $timeService = Get-Service -Name 'w32time' -ErrorAction Stop
+
+        if ($timeService.StartType -eq 'Disabled') {
+            Set-Service -Name 'w32time' -StartupType Manual -ErrorAction Stop
+        }
+
+        if ($timeService.Status -ne 'Running') {
+            Start-Service -Name 'w32time' -ErrorAction Stop
+        }
+
+        $syncOutput = & w32tm /resync 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            throw "w32tm returned exit code $LASTEXITCODE. Output: $($syncOutput -join ' ')"
+        }
+
+        Write-Log "System time synchronization completed" -Level Success
+    }
+    catch {
+        Write-Log "System time synchronization failed: $_" -Level Warning
+    }
+}
+
 Function Test-PrerequisiteDiskSpace {
     <#
     .SYNOPSIS
@@ -233,6 +263,7 @@ Export-ModuleMember -Function @(
     'Write-Log'
     'Test-PrerequisiteAdmin'
     'Test-PrerequisiteInternet'
+    'Sync-SystemTimeWithInternet'
     'Test-PrerequisiteDiskSpace'
     'Test-WindowsVersion'
     'Get-SystemGPU'
