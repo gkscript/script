@@ -6,11 +6,13 @@ A comprehensive Windows setup and customization tool with a graphical script men
 
 ### Setup Script (`main.ps1`)
 - **Automated Windows Configuration**: Installs software packages, applies registry tweaks, removes bloatware
-- **Pre-flight Validation**: Checks admin rights, internet connectivity, disk space, and Windows version
+- **Pre-flight Validation**: Checks admin rights, internet connectivity, syncs system time, and checks Windows version
 - **Multiple Deployment Types**: Business, Consumer, IT configurations
 - **Comprehensive Logging**: All operations logged to `C:\Logs\PSScriptSetup\`
+- **Resilient Package Installation**: Per-package retries with install verification and Chrome fallback to winget
 - **GPU Support**: Detects and installs NVIDIA, AMD, or Intel GPU drivers automatically
 - **BitLocker Management**: Safely handles encrypted drives
+- **Microsoft 365 Removal**: Uses Office Deployment Tool first, then winget fallback for detected language variants
 - **Error Handling**: Robust error handling with graceful fallbacks
 - **Configuration-Driven**: JSON-based configuration for easy customization
 
@@ -55,7 +57,8 @@ Choose one based on your needs:
 | Type | Packages | Office | Branded |
 |------|----------|--------|---------|
 | `business` | VLC, Firefox, Chrome, 7zip, Adobe Reader | No | Yes |
-| `consumer` | business + LibreOffice, Paint.NET | No | Yes || `consumer-nolo` | business + Paint.NET (no LibreOffice) | No | Yes |
+| `consumer` | business + LibreOffice, Paint.NET | No | Yes |
+| `consumer-nolo` | business + Paint.NET (no LibreOffice) | No | Yes |
 
 ## Usage
 
@@ -84,18 +87,19 @@ Choose one based on your needs:
 
 #### What It Does
 1. ✅ Validates administrator rights and internet connectivity
-2. ✅ Checks disk space and Windows version
-3. ✅ Installs Chocolatey package manager
-4. ✅ Installs configured software packages
-5. ✅ Applies registry customizations
-6. ✅ Detects and installs NVIDIA/AMD/Intel GPU drivers if found
-7. ✅ Removes bloatware and unwanted shortcuts
-8. ✅ Disables BitLocker if encrypted
-9. ✅ Installs Dynamic Theme
-10. ✅ Uninstalls MS Office
-11. ✅ Sets default file associations
-12. ✅ Applies desktop icon layout (stops Explorer, writes registry, restarts Explorer)
-13. ✅ Logs all operations to `C:\Logs\PSScriptSetup\`
+2. ✅ Synchronizes system time with internet time source
+3. ✅ Checks Windows version
+4. ✅ Installs Chocolatey package manager
+5. ✅ Installs configured software packages (with retries and verification)
+6. ✅ Applies registry customizations
+7. ✅ Detects and installs NVIDIA/AMD/Intel GPU drivers if found
+8. ✅ Removes bloatware and unwanted shortcuts
+9. ✅ Disables BitLocker if encrypted
+10. ✅ Installs Dynamic Theme
+11. ✅ Uninstalls Microsoft 365/Office (all detected language variants)
+12. ✅ Sets default file associations
+13. ✅ Applies desktop icon layout (stops Explorer, writes registry, restarts Explorer)
+14. ✅ Logs all operations to `C:\Logs\PSScriptSetup\`
 
 ### PSScriptMenuGui Module
 
@@ -273,6 +277,12 @@ Get-ChildItem C:\Logs\PSScriptSetup\ -Filter "*.log" | Sort-Object LastWriteTime
 - Check TLS version: `[Net.ServicePointManager]::SecurityProtocol`
 - Run with verbose: `.\main.ps1 -Verbose`
 
+### Google Chrome is missing after setup
+- Check package-install logs in `C:\Logs\PSScriptSetup\` for `googlechrome`
+- The script retries Chocolatey install up to 3 times, then falls back to `winget` (`Google.Chrome`)
+- Verify winget availability on the target: `winget --version`
+- Manual fallback command: `winget install --id Google.Chrome --silent --accept-package-agreements --accept-source-agreements`
+
 ### GUI menu doesn't display
 - Verify .NET Framework 4.7+ is installed
 - Check CSV file exists and is readable
@@ -361,6 +371,6 @@ For issues and questions:
 
 ---
 
-**Last Updated**: February 2026  
+**Last Updated**: March 2026  
 **PowerShell Version**: 5.1+  
 **Windows Version**: 10, 11

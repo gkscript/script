@@ -56,7 +56,7 @@ try {
     Write-Log "Running pre-flight checks..."
     Test-PrerequisiteAdmin
     Test-PrerequisiteInternet
-    Test-PrerequisiteDiskSpace -requiredBytes $script:config.validation.minDiskSpace
+    Sync-SystemTimeWithInternet
     
     $windowsInfo = Test-WindowsVersion
     $gpuInfo = Get-SystemGPU
@@ -167,23 +167,50 @@ Function Install-Packages {
     try {
         if ($Manager -eq 'chocolatey') {
             choco feature enable -n allowGlobalConfirmation
-            
-            # Install packages (retry once if fails)
-            $attemptCount = 0
-            do {
-                $attemptCount++
-                Write-Log "Installation attempt $attemptCount..."
-                
-                foreach ($package in $PackageList) {
-                    Write-Log "  Installing: $package"
-                    choco install -y $package
-                    
-                    if ($LASTEXITCODE -ne 0) {
-                        Write-Log "    Package installation returned exit code $LASTEXITCODE" -Level Warning
+
+            foreach ($package in $PackageList) {
+                $installed = $false
+                $maxAttempts = 3
+
+                for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+                    Write-Log "  Installing: $package (attempt $attempt/$maxAttempts)"
+                    $null = & choco install -y $package 2>&1
+
+                    if ($LASTEXITCODE -eq 0) {
+                        $localPackage = & choco list --local-only --exact $package 2>&1
+                        if ($localPackage -match "^$([regex]::Escape($package))\s") {
+                            $installed = $true
+                            Write-Log "    Installed: $package" -Level Success
+                            break
+                        }
+                    }
+
+                    Write-Log "    Package install not confirmed for '$package'" -Level Warning
+                    Start-Sleep -Seconds 3
+                }
+
+                if (-not $installed -and $package -eq 'googlechrome') {
+                    Write-Log "  Falling back to winget for Google Chrome..." -Level Warning
+                    if (Get-Command winget -ErrorAction SilentlyContinue) {
+                        $null = & winget install --id Google.Chrome --silent --accept-package-agreements --accept-source-agreements 2>&1
+                        if ($LASTEXITCODE -eq 0) {
+                            $installed = $true
+                            Write-Log "    Installed googlechrome via winget fallback" -Level Success
+                        }
+                        else {
+                            Write-Log "    Winget fallback failed for googlechrome (exit code $LASTEXITCODE)" -Level Warning
+                        }
+                    }
+                    else {
+                        Write-Log "    Winget not available for googlechrome fallback" -Level Warning
                     }
                 }
-            } while ((-not $?) -and ($attemptCount -lt 2))
-            
+
+                if (-not $installed) {
+                    Write-Log "    Failed to install '$package' after retries" -Level Warning
+                }
+            }
+
             Write-Log "Package installation completed" -Level Success
         }
     }
@@ -365,6 +392,92 @@ Function Enable-DynamicTheme {
     }
 }
 
+Function Uninstall-Microsoft365 {
+    <#
+    .SYNOPSIS
+        Uninstall Microsoft 365/Office via ODT with fallback cleanup
+    #>
+    Write-Log "Uninstalling Microsoft 365..."
+
+    $officeSetupPath = Join-Path $PSScriptRoot "OfficeSetup.exe"
+    $officeXmlPath = Join-Path $PSScriptRoot "office.xml"
+
+    if ((Test-Path $officeSetupPath -PathType Leaf) -and (Test-Path $officeXmlPath -PathType Leaf)) {
+        try {
+            Write-Log "Running Office Deployment Tool uninstaller..."
+            $officeProcess = Start-Process -FilePath $officeSetupPath -ArgumentList @('/configure', $officeXmlPath) -Wait -PassThru -NoNewWindow -ErrorAction Stop
+
+            if ($officeProcess.ExitCode -eq 0) {
+                Write-Log "Office Deployment Tool uninstall completed" -Level Success
+            }
+            else {
+                Write-Log "Office Deployment Tool uninstall returned exit code $($officeProcess.ExitCode)" -Level Warning
+            }
+        }
+        catch {
+            Write-Log "Office Deployment Tool uninstall failed: $_" -Level Warning
+        }
+    }
+    else {
+        Write-Log "Office uninstaller files not found (expected '$officeSetupPath' and '$officeXmlPath')" -Level Warning
+    }
+
+    # Fallback cleanup for Microsoft 365 entries, including all detected locale variants.
+    if (Get-Command winget -ErrorAction SilentlyContinue) {
+        $officeNames = @(
+            'Microsoft 365',
+            'Microsoft Office 365',
+            'Microsoft Office'
+        )
+
+        try {
+            $wingetListOutput = & winget list --name "Microsoft 365 - " --accept-source-agreements --source winget 2>&1
+            $detectedLanguageNames = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::OrdinalIgnoreCase)
+
+            foreach ($line in $wingetListOutput) {
+                if ($line -match '^\s*(Microsoft 365\s*-\s*[A-Za-z]{2,3}-[A-Za-z]{2,3})\s{2,}') {
+                    $null = $detectedLanguageNames.Add($Matches[1].Trim())
+                }
+            }
+
+            foreach ($detectedName in $detectedLanguageNames) {
+                if ($detectedName -notin $officeNames) {
+                    $officeNames += $detectedName
+                }
+            }
+        }
+        catch {
+            Write-Log "Could not enumerate Microsoft 365 language variants via winget: $_" -Level Warning
+        }
+
+        foreach ($officeName in $officeNames) {
+            try {
+                $null = & winget uninstall --name $officeName --silent --disable-interactivity --accept-source-agreements --all-versions 2>&1
+                if ($LASTEXITCODE -eq 0) {
+                    Write-Log "Winget removed '$officeName'" -Level Success
+                }
+                else {
+                    Write-Log "Winget could not remove '$officeName' (exit code $LASTEXITCODE)" -Level Info
+                }
+            }
+            catch {
+                Write-Log "Winget uninstall failed for '$officeName': $_" -Level Warning
+            }
+        }
+    }
+    else {
+        Write-Log "Winget not available, skipping Microsoft 365 fallback uninstall" -Level Warning
+    }
+
+    $clickToRunKey = 'HKLM:\SOFTWARE\Microsoft\Office\ClickToRun\Configuration'
+    if (Test-Path $clickToRunKey) {
+        $remainingReleaseIds = (Get-ItemProperty -Path $clickToRunKey -Name ProductReleaseIds -ErrorAction SilentlyContinue).ProductReleaseIds
+        if (-not [string]::IsNullOrWhiteSpace($remainingReleaseIds)) {
+            Write-Log "Microsoft 365 appears to still be installed (ProductReleaseIds: $remainingReleaseIds)" -Level Warning
+        }
+    }
+}
+
 # ============================================================================
 # MAIN EXECUTION
 # ============================================================================
@@ -476,15 +589,7 @@ try {
     
     # Step 9: Uninstall Office
     Write-Log "Step 9: Uninstalling Office (80%)" -Level Success
-    if (Test-Path "src\officesetup.exe" -PathType Leaf) {
-        try {
-            Write-Log "Running Office uninstaller..."
-            & "src\officesetup.exe" /configure "src\office.xml"
-        }
-        catch {
-            Write-Log "Office uninstall failed: $_" -Level Warning
-        }
-    }
+    Uninstall-Microsoft365
     
     # Step 10: Run debloat script
     Write-Log "Step 10: Running debloat script (90%)" -Level Success
