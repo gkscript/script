@@ -177,12 +177,14 @@ Function Get-SystemGPU {
         Get GPU information
     #>
     try {
-        $gpu = Get-CimInstance -ClassName Win32_VideoController -ErrorAction Stop
+        $gpu = Get-CimInstance -ClassName Win32_VideoController -ErrorAction Stop |
+            Sort-Object -Property AdapterRAM -Descending |
+            Select-Object -First 1
         $gpuInfo = @{
             Name = $gpu.Name
-            IsNvidia = $gpu.Name -match [regex]::Escape("nvidia")
-            IsAmd = $gpu.Name -match [regex]::Escape("amd")
-            IsIntel = $gpu.Name -match [regex]::Escape("intel")
+            IsNvidia = $gpu.Name -match 'nvidia'
+            IsAmd = $gpu.Name -match 'amd'
+            IsIntel = $gpu.Name -match 'intel'
         }
         Write-Log "Detected GPU: $($gpuInfo.Name)"
         return $gpuInfo

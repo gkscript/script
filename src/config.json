@@ -20,7 +20,7 @@
       "branded": true
     },
     "consumer-nolo": {
-      "name": "Consumer -LO",
+      "name": "Consumer (No LibreOffice)",
       "packages": ["vlc", "firefox", "googlechrome", "7zip", "adobereader", "paint.net"],
       "installOffice": false,
       "installOracle": false,

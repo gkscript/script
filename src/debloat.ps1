@@ -178,39 +178,29 @@
         "*TuneInRadio*"
     )
 
-function Remove-UWPApp($AppxPackages) {
+function Remove-UWPApp {
+    param(
+        [Parameter(Mandatory)]
+        [string[]]$AppxPackages
+    )
 
-    Process {
-        ForEach ($AppxPackage in $AppxPackages) {
-            If (!((Get-AppxPackage -AllUsers -Name "$AppxPackage") -or (Get-AppxProvisionedPackage -Online | Where-Object DisplayName -like "$AppxPackage"))) {
-                Write-Status "?", $TweakType -Status "$AppxPackage was already removed or not found..." -Warning
-                Continue
-            }
-
-            Write-Status "Trying to remove $AppxPackage from ALL users..."
-            Get-AppxPackage -AllUsers -Name "$AppxPackage" | Remove-AppxPackage -AllUsers
-            Get-AppxProvisionedPackage -Online | Where-Object DisplayName -like "$AppxPackage" | Remove-AppxProvisionedPackage -Online -AllUsers
+    ForEach ($AppxPackage in $AppxPackages) {
+        If (!((Get-AppxPackage -AllUsers -Name "$AppxPackage") -or (Get-AppxProvisionedPackage -Online | Where-Object DisplayName -like "$AppxPackage"))) {
+            Write-Output "$AppxPackage was already removed or not found."
+            Continue
         }
+
+        Write-Output "Removing $AppxPackage from all users..."
+        Get-AppxPackage -AllUsers -Name "$AppxPackage" | Remove-AppxPackage -AllUsers
+        Get-AppxProvisionedPackage -Online | Where-Object DisplayName -like "$AppxPackage" | Remove-AppxProvisionedPackage -Online -AllUsers
     }
 }
 
-function Write-Status($Types) {
-    
-    $TypesDone = ""
-
-    ForEach ($Type in $Types) {
-        $TypesDone += "Removed $Type"
-    }
-
-    Write-Output "$TypesDone".Trim()
+function Import-TelemetryRegistry {
+    & "$env:SystemRoot\System32\reg.exe" import "$PSScriptRoot\disable_telemetry.reg"
 }
 
-function reg{
-    reg import "src\disable_telemetry.reg"
-}
-
-function uninstallfun{
-
+function uninstallfun {
     $adware = "HP Connection Optimizer", "Microsoft Family", "Microsoft-Tipps", "Microsoft Solitaire Collection", "Feedback-Hub", "Microsoft Kontakte", "office", "WebAdvisor von McAfee", "Xbox", "HP Documentation", "Power Automate", "Mail und Kalender", "myHP", "Alexa", "HP Quickdrop", "HP Smart", "HP System Event Utility", "Dropbox-Sonderaktion", "skype", "Nachrichten", "Microsoft Whiteboard", "Intel(R) Management and Security Status", "HP Easy Clean", "HP Privacy Settings", "HP PC Hardware Diagnostics Windows", "optane", "officehub", "outlook for windows"
 
     foreach ($program in $adware) {
@@ -218,10 +208,9 @@ function uninstallfun{
     }
 }
 
-
-function chrome{
+function Remove-ChromeWebApps {
     taskkill /f /im chrome.exe
-    src/AutoHotkey32.exe src/chrome.ahk
+    & "$PSScriptRoot\AutoHotkey32.exe" "$PSScriptRoot\chrome.ahk"
     winget uninstall "tabellen"
     winget uninstall "präsentationen"
     winget uninstall "youtube"
@@ -237,8 +226,9 @@ Remove-UWPApp -AppxPackages $ManufacturerApps
 Remove-UWPApp -AppxPackages $SocialMediaApps
 Remove-UWPApp -AppxPackages $StreamingServicesApps
 uninstallfun
-$null = winget list -q "gmail"
-if ($?){
-chrome
+Import-TelemetryRegistry
+$gmailCheck = & winget list -q "gmail" --accept-source-agreements 2>&1
+if ($gmailCheck -match "gmail") {
+    Remove-ChromeWebApps
 }
 

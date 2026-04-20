@@ -57,6 +57,7 @@ try {
     Test-PrerequisiteAdmin
     Test-PrerequisiteInternet
     Sync-SystemTimeWithInternet
+    Test-PrerequisiteDiskSpace -requiredBytes $script:config.validation.minDiskSpace
     
     $windowsInfo = Test-WindowsVersion
     $gpuInfo = Get-SystemGPU
@@ -220,7 +221,7 @@ Function Install-Packages {
     }
 }
 
-Function Apply-RegistrySettings {
+Function Set-RegistrySettings {
     <#
     .SYNOPSIS
         Apply Windows registry settings
@@ -237,7 +238,7 @@ Function Apply-RegistrySettings {
         foreach ($regFile in $RegistryFiles) {
             if (Test-Path $regFile) {
                 Write-Log "  Importing: $regFile"
-                reg import $regFile
+                & "$env:SystemRoot\System32\reg.exe" import $regFile
                 
                 if ($LASTEXITCODE -ne 0) {
                     Write-Log "    Registry import returned exit code $LASTEXITCODE" -Level Warning
@@ -318,7 +319,7 @@ Function Remove-BloatwareShortcuts {
     }
 }
 
-Function Clean-DesktopIcons {
+Function Clear-DesktopIcons {
     <#
     .SYNOPSIS
         Clean desktop of unwanted icons using whitelist
@@ -484,24 +485,24 @@ Function Uninstall-Microsoft365 {
 
 try {
     # Step 1: Install package managers
-    Write-Log "Step 1: Installing package managers (5%)" -Level Success
+    Write-Log "Step 1: Installing package managers (5%)"
     Install-PackageManager -Manager chocolatey
-    
+
     # Step 2: Install software packages
-    Write-Log "Step 2: Installing software packages (20%)" -Level Success
+    Write-Log "Step 2: Installing software packages (20%)"
     Install-Packages -PackageList $deploymentConfig.packages -Manager chocolatey
-    
+
     # Step 3: Install GPU drivers if applicable
     if ($gpuInfo.IsNvidia) {
-        Write-Log "Step 3a: Installing NVIDIA drivers (30%)" -Level Success
+        Write-Log "Step 3a: Installing NVIDIA drivers (30%)"
         Install-Packages -PackageList @('nvidia-app') -Manager chocolatey
     }
     elseif ($gpuInfo.IsAmd) {
-        Write-Log "Step 3a: Installing AMD drivers (30%)" -Level Success
+        Write-Log "Step 3a: Installing AMD drivers (30%)"
         Install-Packages -PackageList @('amd-radeon-software') -Manager chocolatey
     }
     elseif ($gpuInfo.IsIntel) {
-        Write-Log "Step 3a: Installing Intel Graphics drivers (30%)" -Level Success
+        Write-Log "Step 3a: Installing Intel Graphics drivers (30%)"
         try {
             # Chocolatey's intel-graphics-driver package downloads from Intel's CDN which often returns 403.
             # Use winget instead, which resolves directly via the official Intel store entry.
@@ -518,12 +519,12 @@ try {
     }
     
     # Step 4: Apply registry settings
-    Write-Log "Step 4: Applying registry settings (40%)" -Level Success
+    Write-Log "Step 4: Applying registry settings (40%)"
     $registryFiles = @()
-    if (-not $deploymentConfig.branded -eq $false) {
-        $registryFiles += "src/Logo_Info.reg"
+    if ($deploymentConfig.branded) {
+        $registryFiles += "$PSScriptRoot\Logo_Info.reg"
     }
-    $registryFiles += "src/icons.reg"
+    $registryFiles += "$PSScriptRoot\icons.reg"
     
     $registryValues = @{
         'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize' = @(
@@ -540,18 +541,18 @@ try {
         )
     }
     
-    Apply-RegistrySettings -RegistryFiles $registryFiles -RegistryValues $registryValues
+    Set-RegistrySettings -RegistryFiles $registryFiles -RegistryValues $registryValues
     
     # Step 5: Remove bloatware shortcuts
     if (-not $SkipBloatwareRemoval) {
-        Write-Log "Step 5: Removing bloatware (50%)" -Level Success
+        Write-Log "Step 5: Removing bloatware (50%)"
         Remove-BloatwareShortcuts -ShortcutPaths $script:config.windows.shortcuts
-        Clean-DesktopIcons -WhitelistPath "src/whitelist.txt"
+        Clear-DesktopIcons -WhitelistPath "$PSScriptRoot\whitelist.txt"
     }
     
     # Step 6: Disable BitLocker if needed
     if ($bitlockerStatus.IsEncrypted) {
-        Write-Log "Step 6: Disabling BitLocker (60%)" -Level Success
+        Write-Log "Step 6: Disabling BitLocker (60%)"
         try {
             Disable-BitLocker -MountPoint "C:"
             Write-Log "BitLocker disabled" -Level Success
@@ -562,7 +563,7 @@ try {
     }
     
     # Step 7: Copy files to installation folder
-    Write-Log "Step 7: Setting up installation folder (70%)" -Level Success
+    Write-Log "Step 7: Setting up installation folder (70%)"
     $installFolder = $script:config.paths.installFolder
     if (-not (Test-Path $installFolder)) {
         $null = New-Item -Path $installFolder -ItemType Directory -Force
@@ -570,12 +571,12 @@ try {
     }
     
     if ($deploymentConfig.branded) {
-        if (Test-Path "src/oemlogo.bmp") {
-            Copy-Item "src/oemlogo.bmp" "C:\Windows\System32" -Force
+        if (Test-Path "$PSScriptRoot\oemlogo.bmp") {
+            Copy-Item "$PSScriptRoot\oemlogo.bmp" "C:\Windows\System32" -Force
             Write-Log "Copied OEM logo"
         }
-        if (Test-Path "src/Netixx Helpdesk.exe") {
-            Copy-Item "src/Netixx Helpdesk.exe" $installFolder -Force
+        if (Test-Path "$PSScriptRoot\Netixx Helpdesk.exe") {
+            Copy-Item "$PSScriptRoot\Netixx Helpdesk.exe" $installFolder -Force
             New-Item -Path "$env:PUBLIC\Desktop\Netixx Helpdesk" -ItemType SymbolicLink -Value "$installFolder\Netixx Helpdesk.exe" -Force -ErrorAction Continue
             Write-Log "Installed HelpDesk application"
         }
@@ -583,19 +584,19 @@ try {
     
     # Step 8: Install Dynamic Theme
     if ($windowsInfo.Is11) {
-        Write-Log "Step 8: Installing Dynamic Theme (75%)" -Level Success
+        Write-Log "Step 8: Installing Dynamic Theme (75%)"
         Enable-DynamicTheme
     }
     
     # Step 9: Uninstall Office
-    Write-Log "Step 9: Uninstalling Office (80%)" -Level Success
+    Write-Log "Step 9: Uninstalling Office (80%)"
     Uninstall-Microsoft365
     
     # Step 10: Run debloat script
-    Write-Log "Step 10: Running debloat script (90%)" -Level Success
-    if (Test-Path "src/debloat.ps1") {
+    Write-Log "Step 10: Running debloat script (90%)"
+    if (Test-Path "$PSScriptRoot\debloat.ps1") {
         try {
-            & "src/debloat.ps1"
+            & "$PSScriptRoot\debloat.ps1"
         }
         catch {
             Write-Log "Debloat script failed: $_" -Level Warning
@@ -603,10 +604,10 @@ try {
     }
     
     # Step 11: Set default file associations
-    Write-Log "Step 11: Setting default associations (95%)" -Level Success
-    if (Test-Path "src/SetUserFTA.exe") {
+    Write-Log "Step 11: Setting default associations (95%)"
+    if (Test-Path "$PSScriptRoot\SetUserFTA.exe") {
         try {
-            & "src/SetUserFTA.exe" "src/assoc.txt"
+            & "$PSScriptRoot\SetUserFTA.exe" "$PSScriptRoot\assoc.txt"
         }
         catch {
             Write-Log "Set file associations failed: $_" -Level Warning
@@ -621,7 +622,7 @@ try {
     # Final: Stop Explorer, write icon layout to registry, then restart Explorer.
     # The registry write MUST happen while Explorer is dead - otherwise Explorer
     # overwrites IconLayouts with the current layout on shutdown.
-    Write-Log "Finalizing... (98%)" -Level Success
+    Write-Log "Finalizing... (98%)"
     try {
         # Prevent Windows from auto-restarting Explorer after we kill it
         $explorerKey = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon'
@@ -634,13 +635,13 @@ try {
         Start-Sleep -Seconds 1
 
         $desktopRegFile = if ($deploymentConfig.packages -contains "libreoffice") {
-            "src/desktop_libreoffice.reg"
+            "$PSScriptRoot\desktop_libreoffice.reg"
         } else {
-            "src/desktop.reg"
+            "$PSScriptRoot\desktop.reg"
         }
         if (Test-Path $desktopRegFile) {
             Write-Log "Applying desktop icon layout ($desktopRegFile)..."
-            Apply-RegistrySettings -RegistryFiles @($desktopRegFile) -RegistryValues @{}
+            Set-RegistrySettings -RegistryFiles @($desktopRegFile) -RegistryValues @{}
             Write-Log "Desktop icon layout applied" -Level Success
         } else {
             Write-Log "Desktop reg file not found: $desktopRegFile" -Level Warning
