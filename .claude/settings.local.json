@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(powershell -ExecutionPolicy Bypass -File build.ps1)",
+      "Bash(sort -k5 -rh)",
+      "Bash(powershell -ExecutionPolicy Bypass -Command ' *)"
+    ]
+  }
+}

@@ -1,5 +1,9 @@
 # Build outputs
 deploy*.exe
+gk-script.exe
+
+# Local build tools (not committed — place rcedit.exe here to enable icon embedding)
+tools/
 
 # Runtime logs
 *.log
