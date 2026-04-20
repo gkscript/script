@@ -45,7 +45,8 @@ catch {
 
 # Initialize logging using path from config
 Initialize-Logging -logPath $script:config.logging.logPath
-Write-Log "=== PSScript Setup Starting ===" -Level Success
+$script:Version = (Get-Content "$PSScriptRoot\version.txt" -Raw -ErrorAction SilentlyContinue)?.Trim()
+Write-Log "=== PSScript Setup Starting (v$script:Version) ===" -Level Success
 Write-Log "Deployment Type: $DeploymentType"
 Write-Log "Config Path: $ConfigPath"
 Write-Log "Configuration loaded successfully"

@@ -8,22 +8,16 @@
     "business": {
       "name": "Business",
       "packages": ["vlc", "firefox", "googlechrome", "7zip", "adobereader"],
-      "installOffice": false,
-      "installOracle": false,
       "branded": true
     },
     "consumer": {
       "name": "Consumer",
       "packages": ["vlc", "firefox", "googlechrome", "7zip", "adobereader", "libreoffice", "paint.net"],
-      "installOffice": false,
-      "installOracle": false,
       "branded": true
     },
     "consumer-nolo": {
       "name": "Consumer (No LibreOffice)",
       "packages": ["vlc", "firefox", "googlechrome", "7zip", "adobereader", "paint.net"],
-      "installOffice": false,
-      "installOracle": false,
       "branded": true
     }
   },
