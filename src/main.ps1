@@ -45,7 +45,7 @@ catch {
 
 # Initialize logging using path from config
 Initialize-Logging -logPath $script:config.logging.logPath
-$script:Version = (Get-Content "$PSScriptRoot\version.txt" -Raw -ErrorAction SilentlyContinue)?.Trim()
+$script:Version = (Get-Content "$PSScriptRoot\version.txt" -Raw -ErrorAction SilentlyContinue) -replace '\s'
 Write-Log "=== PSScript Setup Starting (v$script:Version) ===" -Level Success
 Write-Log "Deployment Type: $DeploymentType"
 Write-Log "Config Path: $ConfigPath"
@@ -83,6 +83,77 @@ Write-Log "Deploying: $($deploymentConfig.name)"
 # ============================================================================
 # FUNCTION DEFINITIONS
 # ============================================================================
+
+Function Remove-PreinstalledAV {
+    $avPatterns = @(
+        '*McAfee*', '*Norton*', '*HP Wolf Security*',
+        '*HP Security Update Service*', '*Avast*',
+        '*AVG AntiVirus*', '*AVG Internet Security*', '*Trend Micro*'
+    )
+
+    # Winget names tried directly - catches installs that live in HKCU or AppX and bypass registry search
+    $wingetNames = @('McAfee', 'Norton', 'HP Wolf Security', 'HP Security Update Service',
+                     'Avast', 'AVG', 'Trend Micro')
+
+    $regPaths = @(
+        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
+        'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*',
+        'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*'
+    )
+
+    $allEntries = Get-ItemProperty $regPaths -ErrorAction SilentlyContinue |
+        Where-Object { $_.DisplayName }
+
+    $found = @()
+    foreach ($pattern in $avPatterns) {
+        $found += $allEntries | Where-Object { $_.DisplayName -like $pattern }
+    }
+    $found = $found | Sort-Object DisplayName -Unique
+
+    if ($found.Count -gt 0) {
+        Write-Log "Found $($found.Count) AV product(s) in registry" -Level Info
+    } else {
+        Write-Log "No AV software found in registry - will still attempt winget sweep" -Level Info
+    }
+
+    $removed = 0
+
+    # Pass 1: winget sweep by brand name (works even when registry detection misses the install)
+    if (Get-Command winget -ErrorAction SilentlyContinue) {
+        foreach ($name in $wingetNames) {
+            $null = & winget uninstall --name $name --silent --disable-interactivity --accept-source-agreements --all-versions 2>&1
+            if ($LASTEXITCODE -eq 0) {
+                Write-Log "  Removed via winget: $name" -Level Success
+                $removed++
+            }
+        }
+    }
+
+    # Pass 2: registry uninstall string fallback for anything winget could not handle
+    foreach ($entry in $found) {
+        Write-Log "  Registry entry: $($entry.DisplayName) $($entry.DisplayVersion)"
+        $uninstallString = $entry.QuietUninstallString
+        if (-not $uninstallString) { $uninstallString = $entry.UninstallString }
+        if ($uninstallString) {
+            try {
+                if ($uninstallString -match '(?i)msiexec') {
+                    $guid = [regex]::Match($uninstallString, '\{[^}]+\}').Value
+                    $null = & msiexec.exe /x $guid /quiet /norestart 2>&1
+                } else {
+                    $null = & cmd /c "$uninstallString" 2>&1
+                }
+                Write-Log "  Removed via uninstaller: $($entry.DisplayName)" -Level Success
+                $removed++
+            } catch {
+                Write-Log "  Failed to remove $($entry.DisplayName): $_" -Level Warning
+            }
+        } else {
+            Write-Log "  No uninstall string for $($entry.DisplayName)" -Level Warning
+        }
+    }
+
+    Write-Log "AV removal complete - removed $removed product(s)" -Level $(if ($removed -gt 0) { 'Success' } else { 'Info' })
+}
 
 Function Install-PackageManager {
     <#
@@ -146,6 +217,35 @@ Function Install-PackageManager {
     }
 }
 
+$script:PackageDisplayNames = @{
+    'googlechrome'       = 'Google Chrome'
+    'nvidia-app'         = 'NVIDIA'
+    'vlc'                = 'VLC media player'
+    'firefox'            = 'Mozilla Firefox'
+    '7zip'               = '7-Zip'
+    'adobereader'        = 'Adobe Acrobat Reader'
+    'libreoffice'        = 'LibreOffice'
+    'paint.net'          = 'paint.net'
+}
+
+Function Test-PackageInstalledInRegistry {
+    param([string]$PackageName)
+    $displayName = $script:PackageDisplayNames[$PackageName]
+    if (-not $displayName) { return $false }
+    $regPaths = @(
+        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
+        'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*'
+    )
+    $found = Get-ItemProperty $regPaths -ErrorAction SilentlyContinue |
+        Where-Object { $_.DisplayName -like "*$displayName*" } |
+        Select-Object -First 1
+    if ($found) {
+        Write-Log "  $PackageName found in system as '$($found.DisplayName) $($found.DisplayVersion)'" -Level Info
+        return $true
+    }
+    return $false
+}
+
 Function Install-Packages {
     <#
     .SYNOPSIS
@@ -154,7 +254,7 @@ Function Install-Packages {
     param(
         [Parameter(Mandatory)]
         [string[]]$PackageList,
-        
+
         [ValidateSet('chocolatey', 'winget')]
         [string]$Manager = 'chocolatey'
     )
@@ -171,30 +271,51 @@ Function Install-Packages {
             choco feature enable -n allowGlobalConfirmation
 
             foreach ($package in $PackageList) {
+                # Pre-check: already tracked by choco
+                $preCheck = & choco list --local-only --exact $package --limit-output 2>&1
+                if ($preCheck -match "(?m)^$([regex]::Escape($package))\|") {
+                    Write-Log "  Already installed: $package" -Level Info
+                    continue
+                }
+
                 $installed = $false
                 $maxAttempts = 3
 
                 for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
                     Write-Log "  Installing: $package (attempt $attempt/$maxAttempts)"
-                    $null = & choco install -y $package 2>&1
+                    $chocoArgs = @('-y', $package)
+                    # Chrome's choco package frequently has a stale expected hash; ignore-checksums is safe here
+                    if ($package -eq 'googlechrome') { $chocoArgs += '--ignore-checksums' }
+                    & choco install @chocoArgs
+                    $chocoExit = $LASTEXITCODE
 
-                    if ($LASTEXITCODE -eq 0) {
-                        $localPackage = & choco list --local-only --exact $package 2>&1
-                        if ($localPackage -match "^$([regex]::Escape($package))\s") {
-                            $installed = $true
-                            Write-Log "    Installed: $package" -Level Success
-                            break
-                        }
+                    # Verify via choco tracking (--limit-output gives clean name|version format)
+                    $localPackage = & choco list --local-only --exact $package --limit-output 2>&1
+                    if ($localPackage -match "(?m)^$([regex]::Escape($package))\|") {
+                        $installed = $true
+                        Write-Log "    Installed: $package" -Level Success
+                        break
+                    }
+
+                    # Exit 0/1641/3010 = success or reboot-pending; choco may have skipped an
+                    # externally-installed package without adding it to its tracking DB
+                    if ($chocoExit -in @(0, 1641, 3010)) {
+                        $installed = $true
+                        Write-Log "    Installed: $package" -Level Success
+                        break
                     }
 
                     Write-Log "    Package install not confirmed for '$package'" -Level Warning
-                    Start-Sleep -Seconds 3
+                    if ($attempt -lt $maxAttempts) { Start-Sleep -Seconds 3 }
                 }
 
                 if (-not $installed -and $package -eq 'googlechrome') {
                     Write-Log "  Falling back to winget for Google Chrome..." -Level Warning
                     if (Get-Command winget -ErrorAction SilentlyContinue) {
-                        $null = & winget install --id Google.Chrome --silent --accept-package-agreements --accept-source-agreements 2>&1
+                        Write-Log "    Resetting winget sources..." -Level Info
+                        $null = & winget source reset --force 2>&1
+                        $null = & winget source update --disable-interactivity 2>&1
+                        & winget install --id Google.Chrome --silent --accept-package-agreements --accept-source-agreements --source winget
                         if ($LASTEXITCODE -eq 0) {
                             $installed = $true
                             Write-Log "    Installed googlechrome via winget fallback" -Level Success
@@ -209,7 +330,11 @@ Function Install-Packages {
                 }
 
                 if (-not $installed) {
-                    Write-Log "    Failed to install '$package' after retries" -Level Warning
+                    if (Test-PackageInstalledInRegistry -PackageName $package) {
+                        $installed = $true
+                    } else {
+                        Write-Log "    Failed to install '$package' after retries" -Level Warning
+                    }
                 }
             }
 
@@ -345,7 +470,7 @@ Function Clear-DesktopIcons {
         foreach ($item in $desktopItems) {
             if ($item.Name -notin $whitelist) {
                 Write-Log "  Removing: $($item.Name)"
-                Remove-Item $item.FullName -Force -ErrorAction Continue
+                Remove-Item $item.FullName -Force -Recurse -ErrorAction Continue
                 $removedCount++
             }
         }
@@ -395,88 +520,87 @@ Function Enable-DynamicTheme {
 }
 
 Function Uninstall-Microsoft365 {
-    <#
-    .SYNOPSIS
-        Uninstall Microsoft 365/Office via ODT with fallback cleanup
-    #>
     Write-Log "Uninstalling Microsoft 365..."
 
-    $officeSetupPath = Join-Path $PSScriptRoot "OfficeSetup.exe"
-    $officeXmlPath = Join-Path $PSScriptRoot "office.xml"
+    $clickToRunKey = 'HKLM:\SOFTWARE\Microsoft\Office\ClickToRun\Configuration'
 
-    if ((Test-Path $officeSetupPath -PathType Leaf) -and (Test-Path $officeXmlPath -PathType Leaf)) {
-        try {
-            Write-Log "Running Office Deployment Tool uninstaller..."
-            $officeProcess = Start-Process -FilePath $officeSetupPath -ArgumentList @('/configure', $officeXmlPath) -Wait -PassThru -NoNewWindow -ErrorAction Stop
-
-            if ($officeProcess.ExitCode -eq 0) {
-                Write-Log "Office Deployment Tool uninstall completed" -Level Success
-            }
-            else {
-                Write-Log "Office Deployment Tool uninstall returned exit code $($officeProcess.ExitCode)" -Level Warning
-            }
-        }
-        catch {
-            Write-Log "Office Deployment Tool uninstall failed: $_" -Level Warning
-        }
-    }
-    else {
-        Write-Log "Office uninstaller files not found (expected '$officeSetupPath' and '$officeXmlPath')" -Level Warning
+    # Helper: check if Office is still present
+    function Test-OfficeStillInstalled {
+        if (-not (Test-Path $clickToRunKey)) { return $false }
+        $ids = (Get-ItemProperty -Path $clickToRunKey -Name ProductReleaseIds -ErrorAction SilentlyContinue).ProductReleaseIds
+        return (-not [string]::IsNullOrWhiteSpace($ids))
     }
 
-    # Fallback cleanup for Microsoft 365 entries, including all detected locale variants.
+    if (-not (Test-OfficeStillInstalled)) {
+        Write-Log "Microsoft 365 not detected - skipping" -Level Info
+        return
+    }
+
+    # Pass 1: winget (fast, handles modern Click-to-Run and locale variants)
     if (Get-Command winget -ErrorAction SilentlyContinue) {
-        $officeNames = @(
-            'Microsoft 365',
-            'Microsoft Office 365',
-            'Microsoft Office'
-        )
+        Write-Log "Attempting Office removal via winget..." -Level Info
+        $null = & winget source update --disable-interactivity 2>&1
+
+        $officeNames = @('Microsoft 365', 'Microsoft Office 365', 'Microsoft Office')
 
         try {
             $wingetListOutput = & winget list --name "Microsoft 365 - " --accept-source-agreements --source winget 2>&1
-            $detectedLanguageNames = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::OrdinalIgnoreCase)
-
+            $detectedNames = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::OrdinalIgnoreCase)
             foreach ($line in $wingetListOutput) {
                 if ($line -match '^\s*(Microsoft 365\s*-\s*[A-Za-z]{2,3}-[A-Za-z]{2,3})\s{2,}') {
-                    $null = $detectedLanguageNames.Add($Matches[1].Trim())
+                    $null = $detectedNames.Add($Matches[1].Trim())
                 }
             }
-
-            foreach ($detectedName in $detectedLanguageNames) {
-                if ($detectedName -notin $officeNames) {
-                    $officeNames += $detectedName
-                }
-            }
+            foreach ($n in $detectedNames) { if ($n -notin $officeNames) { $officeNames += $n } }
         }
         catch {
-            Write-Log "Could not enumerate Microsoft 365 language variants via winget: $_" -Level Warning
+            Write-Log "Could not enumerate Microsoft 365 language variants: $_" -Level Warning
         }
 
         foreach ($officeName in $officeNames) {
-            try {
-                $null = & winget uninstall --name $officeName --silent --disable-interactivity --accept-source-agreements --all-versions 2>&1
-                if ($LASTEXITCODE -eq 0) {
-                    Write-Log "Winget removed '$officeName'" -Level Success
-                }
-                else {
-                    Write-Log "Winget could not remove '$officeName' (exit code $LASTEXITCODE)" -Level Info
-                }
-            }
-            catch {
-                Write-Log "Winget uninstall failed for '$officeName': $_" -Level Warning
+            $null = & winget uninstall --name $officeName --silent --disable-interactivity --accept-source-agreements --all-versions 2>&1
+            if ($LASTEXITCODE -eq 0) {
+                Write-Log "  Removed '$officeName' via winget" -Level Success
             }
         }
-    }
-    else {
-        Write-Log "Winget not available, skipping Microsoft 365 fallback uninstall" -Level Warning
     }
 
-    $clickToRunKey = 'HKLM:\SOFTWARE\Microsoft\Office\ClickToRun\Configuration'
-    if (Test-Path $clickToRunKey) {
-        $remainingReleaseIds = (Get-ItemProperty -Path $clickToRunKey -Name ProductReleaseIds -ErrorAction SilentlyContinue).ProductReleaseIds
-        if (-not [string]::IsNullOrWhiteSpace($remainingReleaseIds)) {
-            Write-Log "Microsoft 365 appears to still be installed (ProductReleaseIds: $remainingReleaseIds)" -Level Warning
+    if (-not (Test-OfficeStillInstalled)) {
+        Write-Log "Microsoft 365 removed successfully" -Level Success
+        return
+    }
+
+    # Pass 2: registry uninstall string
+    if (Test-OfficeStillInstalled) {
+        Write-Log "Attempting registry-based Office uninstall..." -Level Warning
+        $regPaths = @(
+            'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
+            'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*'
+        )
+        $officeEntries = Get-ItemProperty $regPaths -ErrorAction SilentlyContinue |
+            Where-Object { $_.DisplayName -like '*Microsoft 365*' -or $_.DisplayName -like '*Microsoft Office*' }
+        foreach ($entry in $officeEntries) {
+            $uninst = if ($entry.QuietUninstallString) { $entry.QuietUninstallString } else { $entry.UninstallString }
+            if ($uninst) {
+                Write-Log "  Running uninstaller for '$($entry.DisplayName)'"
+                try {
+                    if ($uninst -match '(?i)msiexec') {
+                        $guid = [regex]::Match($uninst, '\{[^}]+\}').Value
+                        $null = & msiexec.exe /x $guid /quiet /norestart 2>&1
+                    } else {
+                        $null = & cmd /c "$uninst" 2>&1
+                    }
+                } catch {
+                    Write-Log "  Uninstaller failed for '$($entry.DisplayName)': $_" -Level Warning
+                }
+            }
         }
+    }
+
+    if (Test-OfficeStillInstalled) {
+        Write-Log "Microsoft 365 may still be partially installed - manual removal may be needed" -Level Warning
+    } else {
+        Write-Log "Microsoft 365 removed successfully" -Level Success
     }
 }
 
@@ -485,6 +609,10 @@ Function Uninstall-Microsoft365 {
 # ============================================================================
 
 try {
+    # Step 0: Remove pre-installed AV software
+    Write-Log "Step 0: Removing pre-installed AV software (2%)"
+    Remove-PreinstalledAV
+
     # Step 1: Install package managers
     Write-Log "Step 1: Installing package managers (5%)"
     Install-PackageManager -Manager chocolatey
@@ -500,7 +628,17 @@ try {
     }
     elseif ($gpuInfo.IsAmd) {
         Write-Log "Step 3a: Installing AMD drivers (30%)"
-        Install-Packages -PackageList @('amd-radeon-software') -Manager chocolatey
+        try {
+            winget install --id AMD.AdrenalinEdition --silent --accept-package-agreements --accept-source-agreements --source winget
+            if ($LASTEXITCODE -ne 0) {
+                Write-Log "AMD Radeon Software install returned exit code $LASTEXITCODE" -Level Warning
+            } else {
+                Write-Log "AMD Radeon Software installed" -Level Success
+            }
+        }
+        catch {
+            Write-Log "AMD Radeon Software installation failed: $_" -Level Warning
+        }
     }
     elseif ($gpuInfo.IsIntel) {
         Write-Log "Step 3a: Installing Intel Graphics drivers (30%)"

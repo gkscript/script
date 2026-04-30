@@ -2,7 +2,7 @@
 deploy*.exe
 gk-script.exe
 
-# Local build tools (not committed — place rcedit.exe here to enable icon embedding)
+# Local build tools (not committed)
 tools/
 
 # Runtime logs
