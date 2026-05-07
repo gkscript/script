@@ -1,182 +1,5 @@
-#https://github.com/LeDragoX/Win-Debloat-Tools 
-    Write-Progress -Activity "Uninstalling Adware" -Status "90% Complete:" -PercentComplete 85
-    $MSApps = @(
-        # Default Windows 10+ apps
-        "Microsoft.3DBuilder"                    # 3D Builder
-        "Microsoft.549981C3F5F10"                # Cortana
-        "Microsoft.Appconnector"
-        "Microsoft.BingFinance"                  # Finance
-        "Microsoft.BingFoodAndDrink"             # Food And Drink
-        "Microsoft.BingHealthAndFitness"         # Health And Fitness
-        "Microsoft.BingNews"                     # News
-        "Microsoft.BingSports"                   # Sports
-        "Microsoft.BingTranslator"               # Translator
-        "Microsoft.BingTravel"                   # Travel
-        "Microsoft.BingWeather"                  # Weather
-        "Microsoft.CommsPhone"
-        "Microsoft.ConnectivityStore"
-        "Microsoft.Getstarted"
-        "Microsoft.Messaging"
-        "Microsoft.Microsoft3DViewer"
-        "Microsoft.MicrosoftOfficeHub"
-        "Microsoft.MicrosoftPowerBIForWindows"
-        #"Microsoft.MicrosoftSolitaireCollection" # MS Solitaire
-        "Microsoft.MixedReality.Portal"
-        "Microsoft.NetworkSpeedTest"
-        "Microsoft.Office.OneNote"               # MS Office One Note
-        "Microsoft.Office.Sway"
-        "Microsoft.OneConnect"
-        "Microsoft.People"                       # People
-        #"Microsoft.MSPaint"                      # Paint 3D
-        "Microsoft.Print3D"                      # Print 3D
-        "Microsoft.SkypeApp"                     # Skype (Who still uses Skype? Use Discord)
-        "Microsoft.Todos"                        # Microsoft To Do
-        "Microsoft.Wallet"
-        "Microsoft.Whiteboard"                   # Microsoft Whiteboard
-        #"Microsoft.WindowsAlarms"                # Alarms
-        "microsoft.windowscommunicationsapps"
-        "Microsoft.WindowsFeedbackHub"           # Feedback Hub
-        "Microsoft.WindowsMaps"                  # Maps
-        "Microsoft.WindowsPhone"
-        "Microsoft.WindowsReadingList"
-        "Microsoft.WindowsSoundRecorder"         # Windows Sound Recorder
-        "Microsoft.XboxApp"                      # Xbox Console Companion (Replaced by new App)
-        "Microsoft.YourPhone"                    # Your Phone
-        "Microsoft.ZuneMusic"                    # Groove Music / (New) Windows Media Player
-        "Microsoft.ZuneVideo"                    # Movies & TV
-
-        # Apps which other apps depend on
-        #"Microsoft.Advertising.Xaml"
-
-        # Default Windows 11 apps
-        #"Clipchamp.Clipchamp"				     # Clipchamp – Video Editor
-        "MicrosoftWindows.Client.WebExperience"  # Taskbar Widgets
-        "MicrosoftTeams"                         # Microsoft Teams / Preview
-
-        # <==========[ DIY ]==========> (Remove the # to Uninstall)
-
-        # [DIY] Default apps i'll keep
-        #"Microsoft.FreshPaint"             # Paint
-        #"Microsoft.MicrosoftStickyNotes"   # Sticky Notes
-        #"Microsoft.WindowsCalculator"      # Calculator
-        #"Microsoft.WindowsCamera"          # Camera
-        #"Microsoft.ScreenSketch"           # Snip and Sketch (now called Snipping tool, replaces the Win32 version in clean installs)
-        "Microsoft.Windows.DevHome"        # Dev Home
-        #"Microsoft.Windows.Photos"         # Photos / Video Editor
-
-        # [DIY] Can't be reinstalled
-        #"Microsoft.WindowsStore"           # Windows Store
-
-        # Apps which cannot be removed using Remove-AppxPackage
-        #"Microsoft.BioEnrollment"
-        #"Microsoft.WindowsFeedback"        # Feedback Module
-        #"Windows.ContactSupport"
-    )
-
-    $ThirdPartyApps = @(
-        "*ACGMediaPlayer*"
-        "*ActiproSoftwareLLC*"
-        "*AdobePhotoshopExpress*"           # Adobe Photoshop Express
-        "Amazon.com.Amazon"                 # Amazon Shop
-        "*Asphalt8Airborne*"                # Asphalt 8 Airbone
-        "*AutodeskSketchBook*"
-        "*BubbleWitch3Saga*"                # Bubble Witch 3 Saga
-        "*CaesarsSlotsFreeCasino*"
-        "*CandyCrush*"                      # Candy Crush
-        "*COOKINGFEVER*"
-        "*CyberLinkMediaSuiteEssentials*"
-        "*DisneyMagicKingdoms*"
-        "*Dolby*"                           # Dolby Products (Like Atmos)
-        "*DrawboardPDF*"
-        "*Duolingo-LearnLanguagesforFree*"  # Duolingo
-        "*EclipseManager*"
-        "*FarmVille2CountryEscape*"
-        "*FitbitCoach*"
-        "*Flipboard*"                       # Flipboard
-        "*HiddenCity*"
-        "*Keeper*"
-        "*LinkedInforWindows*"
-        "*MarchofEmpires*"
-        "*NYTCrossword*"
-        "*OneCalendar*"
-        "*PandoraMediaInc*"
-        "*PhototasticCollage*"
-        "*PicsArt-PhotoStudio*"
-        "*PolarrPhotoEditorAcademicEdition*"
-        "*RoyalRevolt*"                     # Royal Revolt
-        "*Shazam*"
-        "*Sidia.LiveWallpaper*"             # Live Wallpaper
-        "*Speed Test*"
-        "*Sway*"
-        "*WinZipUniversal*"
-        "*Wunderlist*"
-        "*XING*"
-    )
-
-    $ManufacturerApps = @(
-        # Dell Bloat
-        "DB6EA5DB.MediaSuiteEssentialsforDell"
-        "DB6EA5DB.PowerDirectorforDell"
-        "DB6EA5DB.Power2GoforDell"
-        "DB6EA5DB.PowerMediaPlayerforDell"
-        #"DellInc.423703F9C7E0E"                # Alienware OC Controls
-        #"DellInc.6066037A8FCF7"                # Alienware Control Center
-        #"DellInc.AlienwareCommandCenter"       # Alienware Command Center
-        #"DellInc.AlienwareFXAW*"               # Alienware FX AWxx versions
-        #"DellInc.AlienwareFXAW21"              # Alienware FX AW21
-        "DellInc.DellCustomerConnect"           # Dell Customer Connect
-        "DellInc.DellDigitalDelivery"           # Dell Digital Delivery
-        "DellInc.DellHelpSupport"
-        "DellInc.DellProductRegistration"
-        "DellInc.MyDell"                        # My Dell
-
-        # HP
-        ""
-
-        # Huawei
-        "4E6B5B3A.HUAWEIMobileCloud"            # HUAWEI Mobile Cloud
-        "HuaweiPCManager"                       # Huawei PC Manager
-
-        # Lenovo
-        "E0469640.LenovoSettings"               # Lenovo Settings
-        "E0469640.LenovoID"                     # Lenovo ID
-        "E0469640.LenovoExperienceImprovement"  # Lenovo Experience Improvement
-        "E046963F.LenovoCompanion"              # Lenovo Companion
-        "E046963F.LenovoSmartCare"              # Lenovo Smart Care
-
-        # Acer
-        "AcerIncorporated.AcerCollection*"      # Acer Collection
-        "AcerIncorporated.AcerPortal"           # Acer Portal
-        "AcerIncorporated.QuickAccess"          # Acer Quick Access
-        "AcerIncorporated.UserExperienceProgram" # Acer User Experience Program
-
-        # Asus
-        "B9EACED6.AsusROGLiveService"           # Asus ROG Live Service
-        "ASUSTeK.GamingCenterService"           # Asus Gaming Center
-        "ASUSTeK.ZenUIStoreROG"                 # Asus ZenUI Store
-        "*AsusUpdate*"                          # Asus Update
-    )
-
-    $SocialMediaApps = @(
-        "5319275A.WhatsAppDesktop"  # WhatsApp
-        "BytedancePte.Ltd.TikTok"   # TikTok
-        "FACEBOOK.317180B0BB486"    # Messenger
-        "FACEBOOK.FACEBOOK"         # Facebook
-        "Facebook.Instagram*"       # Instagram / Beta
-        "*Twitter*"                 # Twitter
-        "*Viber*"
-    )
-
-    $StreamingServicesApps = @(
-        "AmazonVideo.PrimeVideo"    # Amazon Prime Video
-        "*Hulu*"
-        "*iHeartRadio*"
-        "*Netflix*"                 # Netflix
-        "*Plex*"                    # Plex
-        "*SlingTV*"
-        "SpotifyAB.SpotifyMusic"    # Spotify
-        "*TuneInRadio*"
-    )
+#https://github.com/Raphire/Win11Debloat
+Write-Progress -Activity "Uninstalling Adware" -Status "90% Complete:" -PercentComplete 85
 
 function Remove-UWPApp {
     param(
@@ -197,11 +20,15 @@ function Remove-UWPApp {
 }
 
 function Import-TelemetryRegistry {
-    & "$env:SystemRoot\System32\reg.exe" import "$PSScriptRoot\disable_telemetry.reg"
+    try {
+        $null = & "$env:SystemRoot\System32\reg.exe" import "$PSScriptRoot\disable_telemetry.reg" 2>&1
+    } catch {
+        Write-Output "Telemetry registry import warning: $_"
+    }
 }
 
 function uninstallfun {
-    $adware = "HP Connection Optimizer", "Microsoft Family", "Microsoft-Tipps", "Microsoft Solitaire Collection", "Feedback-Hub", "Microsoft Kontakte", "office", "WebAdvisor von McAfee", "Xbox", "HP Documentation", "Power Automate", "Mail und Kalender", "myHP", "Alexa", "HP Quickdrop", "HP Smart", "HP System Event Utility", "Dropbox-Sonderaktion", "skype", "Nachrichten", "Microsoft Whiteboard", "Intel(R) Management and Security Status", "HP Easy Clean", "HP Privacy Settings", "HP PC Hardware Diagnostics Windows", "optane", "officehub", "outlook for windows"
+    $adware = "HP Connection Optimizer", "Microsoft Family", "Microsoft-Tipps", "Microsoft Solitaire Collection", "Feedback-Hub", "Microsoft Kontakte", "office", "WebAdvisor von McAfee", "Xbox", "HP Documentation", "Power Automate", "Mail und Kalender", "myHP", "Alexa", "HP Quickdrop", "HP Smart", "HP System Event Utility", "Dropbox-Sonderaktion", "skype", "Nachrichten", "Microsoft Whiteboard", "Intel(R) Management and Security Status", "HP Easy Clean", "HP Privacy Settings", "HP PC Hardware Diagnostics Windows", "optane", "officehub", "outlook for windows", "Lenovo Smart Meeting", "{25FB0D7A-ED1B-4663-809E-A54E8A4274B0}_is1"
 
     foreach ($program in $adware) {
         winget uninstall --accept-source-agreements --source winget $program
@@ -220,15 +47,277 @@ function Remove-ChromeWebApps {
     taskkill /f /im autohotkey32.exe
 }
 
-Remove-UWPApp -AppxPackages $MSApps
-Remove-UWPApp -AppxPackages $ThirdPartyApps
-Remove-UWPApp -AppxPackages $ManufacturerApps
-Remove-UWPApp -AppxPackages $SocialMediaApps
-Remove-UWPApp -AppxPackages $StreamingServicesApps
+# Apps kept intentionally - too useful or disruptive to remove in enterprise
+$excluded = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+@(
+    'Microsoft.WindowsStore'
+    'Microsoft.OneDrive'
+    'Microsoft.Edge'
+    'Microsoft.Edge XPFFTQ037JWMHS'
+    'XPFFTQ037JWMHS'
+    'Microsoft.Copilot'
+    'Microsoft.WindowsCalculator'
+    'Microsoft.WindowsNotepad'
+    'Microsoft.MSPaint'
+    'Microsoft.Paint'
+    'Microsoft.WindowsCamera'
+    'Microsoft.ScreenSketch'
+    'Microsoft.Windows.Photos'
+    'Microsoft.WindowsTerminal'
+    'Microsoft.RemoteDesktop'
+    'Microsoft.WindowsAlarms'
+    'Microsoft.MicrosoftStickyNotes'
+    'MicrosoftCorporationII.QuickAssist'
+    'Clipchamp.Clipchamp'
+) | ForEach-Object { $null = $excluded.Add($_) }
+
+# OEM bloat and older/alternate package IDs not covered by Win11Debloat
+$oemAndExtras = @(
+    "*Dolby*"
+    "*Speed Test*"
+    "*Sway*"
+    "*Keeper*"
+    "*AsusUpdate*"
+    "4E6B5B3A.HUAWEIMobileCloud"
+    "HuaweiPCManager"
+    "AcerIncorporated.AcerCollection*"
+    "AcerIncorporated.AcerPortal"
+    "AcerIncorporated.QuickAccess"
+    "AcerIncorporated.UserExperienceProgram"
+    "ASUSTeK.GamingCenterService"
+    "ASUSTeK.ZenUIStoreROG"
+    "B9EACED6.AsusROGLiveService"
+    "DB6EA5DB.MediaSuiteEssentialsforDell"
+    "DB6EA5DB.Power2GoforDell"
+    "DB6EA5DB.PowerDirectorforDell"
+    "DB6EA5DB.PowerMediaPlayerforDell"
+    "DellInc.DellCustomerConnect"
+    "DellInc.DellHelpSupport"
+    "DellInc.DellProductRegistration"
+    "DellInc.MyDell"
+    "E046963F.LenovoSmartCare"
+    "E0469640.LenovoExperienceImprovement"
+    "E0469640.LenovoID"
+    "E0469640.LenovoSettings"
+    "E0469640.LenovoSmartCommunication"
+    "5319275A.WhatsAppDesktop"
+    "BytedancePte.Ltd.TikTok"
+    "FACEBOOK.317180B0BB486"
+    "FACEBOOK.FACEBOOK"
+    "Facebook.Instagram*"
+    "SpotifyAB.SpotifyMusic"
+    "Microsoft.Appconnector"
+    "Microsoft.CommsPhone"
+    "Microsoft.ConnectivityStore"
+    "Microsoft.Wallet"
+    "Microsoft.WindowsPhone"
+    "Microsoft.WindowsReadingList"
+)
+
+# Try to fetch the latest list from Win11Debloat
+$appxToRemove = $null
+try {
+    Write-Output "Fetching latest bloatware list from Win11Debloat..."
+    $response = Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Raphire/Win11Debloat/master/Config/Apps.json" `
+        -UseBasicParsing -TimeoutSec 15 -ErrorAction Stop
+    $data = $response.Content | ConvertFrom-Json
+    $fetched = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    foreach ($app in $data.Apps) {
+        $id = $app.AppId.Trim()
+        if ($excluded.Contains($id)) { continue }
+        if ($id -match '\s') { continue }
+        if ($id -notmatch '\.' -and $id -notmatch '\*') { $id = "*$id*" }
+        $null = $fetched.Add($id)
+    }
+    foreach ($id in $oemAndExtras) { $null = $fetched.Add($id) }
+
+    if ($fetched.Count -gt 0) {
+        $appxToRemove = [string[]]$fetched
+        Write-Output "Using live Win11Debloat list ($($appxToRemove.Count) entries after exclusions and OEM merge)."
+    }
+} catch {
+    Write-Output "Could not fetch Win11Debloat list ($($_.Exception.Message)) - using built-in fallback."
+}
+
+# Built-in fallback - merged from Win11Debloat + OEM extras as of 2026-05-07
+if (-not $appxToRemove) {
+    $appxToRemove = @(
+        "*ACGMediaPlayer*"
+        "*ActiproSoftwareLLC*"
+        "*Asphalt8Airborne*"
+        "*AsusUpdate*"
+        "*AutodeskSketchBook*"
+        "*CaesarsSlotsFreeCasino*"
+        "*COOKINGFEVER*"
+        "*CyberLinkMediaSuiteEssentials*"
+        "*Disney*"
+        "*DisneyMagicKingdoms*"
+        "*Dolby*"
+        "*DrawboardPDF*"
+        "*Duolingo-LearnLanguagesforFree*"
+        "*EclipseManager*"
+        "*Facebook*"
+        "*FarmVille2CountryEscape*"
+        "*fitbit*"
+        "*Flipboard*"
+        "*HiddenCity*"
+        "*iHeartRadio*"
+        "*Instagram*"
+        "*Keeper*"
+        "*LinkedInforWindows*"
+        "*MarchofEmpires*"
+        "*MicrosoftTeams*"
+        "*MSTeams*"
+        "*Netflix*"
+        "*NYTCrossword*"
+        "*OneCalendar*"
+        "*PandoraMediaInc*"
+        "*PhototasticCollage*"
+        "*PicsArt-PhotoStudio*"
+        "*Plex*"
+        "*PolarrPhotoEditorAcademicEdition*"
+        "*Shazam*"
+        "*SlingTV*"
+        "*Speed Test*"
+        "*Spotify*"
+        "*Sway*"
+        "*TikTok*"
+        "*TuneInRadio*"
+        "*Twitter*"
+        "*Viber*"
+        "*WinZipUniversal*"
+        "*Wunderlist*"
+        "*XING*"
+        "4E6B5B3A.HUAWEIMobileCloud"
+        "5319275A.WhatsAppDesktop"
+        "AcerIncorporated.AcerCollection*"
+        "AcerIncorporated.AcerPortal"
+        "AcerIncorporated.QuickAccess"
+        "AcerIncorporated.UserExperienceProgram"
+        "AD2F1837.HPAIExperienceCenter"
+        "AD2F1837.HPConnectedMusic"
+        "AD2F1837.HPConnectedPhotopoweredbySnapfish"
+        "AD2F1837.HPDesktopSupportUtilities"
+        "AD2F1837.HPEasyClean"
+        "AD2F1837.HPFileViewer"
+        "AD2F1837.HPJumpStarts"
+        "AD2F1837.HPPCHardwareDiagnosticsWindows"
+        "AD2F1837.HPPowerManager"
+        "AD2F1837.HPPrinterControl"
+        "AD2F1837.HPPrivacySettings"
+        "AD2F1837.HPQuickDrop"
+        "AD2F1837.HPQuickTouch"
+        "AD2F1837.HPRegistration"
+        "AD2F1837.HPSupportAssistant"
+        "AD2F1837.HPSureShieldAI"
+        "AD2F1837.HPSystemInformation"
+        "AD2F1837.HPWelcome"
+        "AD2F1837.HPWorkWell"
+        "AD2F1837.myHP"
+        "AdobeSystemsIncorporated.AdobePhotoshopExpress"
+        "Amazon.com.Amazon"
+        "AmazonVideo.PrimeVideo"
+        "ASUSTeK.GamingCenterService"
+        "ASUSTeK.ZenUIStoreROG"
+        "B9EACED6.AsusROGLiveService"
+        "BytedancePte.Ltd.TikTok"
+
+        "DB6EA5DB.MediaSuiteEssentialsforDell"
+        "DB6EA5DB.Power2GoforDell"
+        "DB6EA5DB.PowerDirectorforDell"
+        "DB6EA5DB.PowerMediaPlayerforDell"
+        "DellInc.DellCustomerConnect"
+        "DellInc.DellDigitalDelivery"
+        "DellInc.DellHelpSupport"
+        "DellInc.DellMobileConnect"
+        "DellInc.DellProductRegistration"
+        "DellInc.DellSupportAssistforPCs"
+        "DellInc.MyDell"
+        "E046963F.LenovoCompanion"
+        "E046963F.LenovoSmartCare"
+        "E0469640.LenovoExperienceImprovement"
+        "E0469640.LenovoID"
+        "E0469640.LenovoSettings"
+        "E0469640.LenovoSmartCommunication"
+        "FACEBOOK.317180B0BB486"
+        "FACEBOOK.FACEBOOK"
+        "Facebook.Instagram*"
+        "HuaweiPCManager"
+        "HULULLC.HULUPLUS"
+        "king.com.BubbleWitch3Saga"
+        "king.com.CandyCrushSaga"
+        "king.com.CandyCrushSodaSaga"
+        "LenovoCompanyLimited.LenovoVantageService"
+        "Microsoft.3DBuilder"
+        "Microsoft.549981C3F5F10"
+        "Microsoft.Appconnector"
+        "Microsoft.BingFinance"
+        "Microsoft.BingFoodAndDrink"
+        "Microsoft.BingHealthAndFitness"
+        "Microsoft.BingNews"
+        "Microsoft.BingSearch"
+        "Microsoft.BingSports"
+        "Microsoft.BingTranslator"
+        "Microsoft.BingTravel"
+        "Microsoft.BingWeather"
+        "Microsoft.CommsPhone"
+        "Microsoft.ConnectivityStore"
+        "Microsoft.GamingApp"
+        "Microsoft.GetHelp"
+        "Microsoft.Getstarted"
+        "Microsoft.M365Companions"
+        "Microsoft.Messaging"
+        "Microsoft.Microsoft3DViewer"
+        "Microsoft.MicrosoftJournal"
+        "Microsoft.MicrosoftOfficeHub"
+        "Microsoft.MicrosoftPowerBIForWindows"
+        "Microsoft.MicrosoftSolitaireCollection"
+        "Microsoft.MixedReality.Portal"
+        "Microsoft.NetworkSpeedTest"
+        "Microsoft.News"
+        "Microsoft.Office.OneNote"
+        "Microsoft.Office.Sway"
+        "Microsoft.OneConnect"
+        "Microsoft.OutlookForWindows"
+        "Microsoft.PCManager"
+        "Microsoft.People"
+        "Microsoft.PowerAutomateDesktop"
+        "Microsoft.Print3D"
+        "Microsoft.SkypeApp"
+        "Microsoft.StartExperiencesApp"
+        "Microsoft.Todos"
+        "Microsoft.Wallet"
+        "Microsoft.Whiteboard"
+        "Microsoft.WidgetsPlatformRuntime"
+        "Microsoft.Windows.AIHub"
+        "Microsoft.Windows.DevHome"
+        "Microsoft.windowscommunicationsapps"
+        "Microsoft.WindowsFeedbackHub"
+        "Microsoft.WindowsMaps"
+        "Microsoft.WindowsPhone"
+        "Microsoft.WindowsReadingList"
+        "Microsoft.WindowsSoundRecorder"
+        "Microsoft.Xbox.TCUI"
+        "Microsoft.XboxApp"
+        "Microsoft.XboxGameOverlay"
+        "Microsoft.XboxGamingOverlay"
+        "Microsoft.XboxIdentityProvider"
+        "Microsoft.XboxSpeechToTextOverlay"
+        "Microsoft.YourPhone"
+        "Microsoft.ZuneMusic"
+        "Microsoft.ZuneVideo"
+        "MicrosoftCorporationII.MicrosoftFamily"
+        "MicrosoftWindows.Client.WebExperience"
+        "MicrosoftWindows.CrossDevice"
+        "Sidia.LiveWallpaper"
+        "SpotifyAB.SpotifyMusic"
+    )
+}
+
+Remove-UWPApp -AppxPackages $appxToRemove
 uninstallfun
 Import-TelemetryRegistry
 $gmailCheck = & winget list -q "gmail" --accept-source-agreements 2>&1
 if ($gmailCheck -match "gmail") {
     Remove-ChromeWebApps
 }
-

@@ -141,20 +141,26 @@ Function Show-ScriptMenuGui {
             }, [System.Windows.Threading.DispatcherPriority]::Render)
         }, [System.Windows.Threading.DispatcherPriority]::Render)
         
-        $buttons = Get-VisualChildren -parent $this -childType ([System.Windows.Controls.Button])
-        
-        ForEach ($button in $buttons) {
+        $script:menuButtons = Get-VisualChildren -parent $this -childType ([System.Windows.Controls.Button])
+
+        ForEach ($button in $script:menuButtons) {
             $button.Add_Click( {
                 param($sender, $eventArgs)
                 Write-Verbose "Button clicked with tag: $($sender.Tag)"
+                # Disable all buttons to prevent double-launching
+                foreach ($btn in $script:menuButtons) {
+                    $btn.IsEnabled = $false
+                }
+                $sender.Content = "Running…"
                 if ($sender.Tag) {
                     Invoke-ButtonAction $sender.Tag
+                    [System.Windows.Window]::GetWindow($sender).Close()
                 } else {
                     Write-Error "Button Tag is empty!"
                 }
             } )
         }
-        Write-Verbose "Attached click handlers to $($buttons.Count) buttons"
+        Write-Verbose "Attached click handlers to $($script:menuButtons.Count) buttons"
     } )
 
     if ($hideConsole) {

@@ -225,6 +225,19 @@ Function Get-BitlockerStatus {
     return @{ IsEncrypted = $false; EncryptionPercentage = 0 }
 }
 
+Function Stop-ProcessWithTimeout {
+    param(
+        [Parameter(Mandatory)][string]$Name,
+        [int]$TimeoutSeconds = 15
+    )
+    $deadline = [datetime]::UtcNow.AddSeconds($TimeoutSeconds)
+    do {
+        $procs = Get-Process $Name -ErrorAction SilentlyContinue
+        if ($procs) { $procs | Stop-Process -Force -ErrorAction SilentlyContinue }
+        Start-Sleep -Milliseconds 300
+    } until (-not (Get-Process $Name -ErrorAction SilentlyContinue) -or [datetime]::UtcNow -gt $deadline)
+}
+
 Function Invoke-SafeProcess {
     <#
     .SYNOPSIS
@@ -271,4 +284,5 @@ Export-ModuleMember -Function @(
     'Get-SystemGPU'
     'Get-BitlockerStatus'
     'Invoke-SafeProcess'
+    'Stop-ProcessWithTimeout'
 )

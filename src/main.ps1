@@ -60,7 +60,6 @@ try {
     Sync-SystemTimeWithInternet
     Test-PrerequisiteDiskSpace -requiredBytes $script:config.validation.minDiskSpace
     
-    $windowsInfo = Test-WindowsVersion
     $gpuInfo = Get-SystemGPU
     $bitlockerStatus = Get-BitlockerStatus
     
@@ -83,77 +82,6 @@ Write-Log "Deploying: $($deploymentConfig.name)"
 # ============================================================================
 # FUNCTION DEFINITIONS
 # ============================================================================
-
-Function Remove-PreinstalledAV {
-    $avPatterns = @(
-        '*McAfee*', '*Norton*', '*HP Wolf Security*',
-        '*HP Security Update Service*', '*Avast*',
-        '*AVG AntiVirus*', '*AVG Internet Security*', '*Trend Micro*'
-    )
-
-    # Winget names tried directly - catches installs that live in HKCU or AppX and bypass registry search
-    $wingetNames = @('McAfee', 'Norton', 'HP Wolf Security', 'HP Security Update Service',
-                     'Avast', 'AVG', 'Trend Micro')
-
-    $regPaths = @(
-        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
-        'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*',
-        'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*'
-    )
-
-    $allEntries = Get-ItemProperty $regPaths -ErrorAction SilentlyContinue |
-        Where-Object { $_.DisplayName }
-
-    $found = @()
-    foreach ($pattern in $avPatterns) {
-        $found += $allEntries | Where-Object { $_.DisplayName -like $pattern }
-    }
-    $found = $found | Sort-Object DisplayName -Unique
-
-    if ($found.Count -gt 0) {
-        Write-Log "Found $($found.Count) AV product(s) in registry" -Level Info
-    } else {
-        Write-Log "No AV software found in registry - will still attempt winget sweep" -Level Info
-    }
-
-    $removed = 0
-
-    # Pass 1: winget sweep by brand name (works even when registry detection misses the install)
-    if (Get-Command winget -ErrorAction SilentlyContinue) {
-        foreach ($name in $wingetNames) {
-            $null = & winget uninstall --name $name --silent --disable-interactivity --accept-source-agreements --all-versions 2>&1
-            if ($LASTEXITCODE -eq 0) {
-                Write-Log "  Removed via winget: $name" -Level Success
-                $removed++
-            }
-        }
-    }
-
-    # Pass 2: registry uninstall string fallback for anything winget could not handle
-    foreach ($entry in $found) {
-        Write-Log "  Registry entry: $($entry.DisplayName) $($entry.DisplayVersion)"
-        $uninstallString = $entry.QuietUninstallString
-        if (-not $uninstallString) { $uninstallString = $entry.UninstallString }
-        if ($uninstallString) {
-            try {
-                if ($uninstallString -match '(?i)msiexec') {
-                    $guid = [regex]::Match($uninstallString, '\{[^}]+\}').Value
-                    $null = & msiexec.exe /x $guid /quiet /norestart 2>&1
-                } else {
-                    $null = & cmd /c "$uninstallString" 2>&1
-                }
-                Write-Log "  Removed via uninstaller: $($entry.DisplayName)" -Level Success
-                $removed++
-            } catch {
-                Write-Log "  Failed to remove $($entry.DisplayName): $_" -Level Warning
-            }
-        } else {
-            Write-Log "  No uninstall string for $($entry.DisplayName)" -Level Warning
-        }
-    }
-
-    Write-Log "AV removal complete - removed $removed product(s)" -Level $(if ($removed -gt 0) { 'Success' } else { 'Info' })
-}
 
 Function Install-PackageManager {
     <#
@@ -278,16 +206,94 @@ Function Install-Packages {
                     continue
                 }
 
+                if (Test-PackageInstalledInRegistry -PackageName $package) {
+                    Write-Log "  Already installed (registry): $package - skipping" -Level Info
+                    continue
+                }
+
                 $installed = $false
                 $maxAttempts = 3
 
                 for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
                     Write-Log "  Installing: $package (attempt $attempt/$maxAttempts)"
-                    $chocoArgs = @('-y', $package)
+                    $chocoArgs = @('install', '-y', $package)
                     # Chrome's choco package frequently has a stale expected hash; ignore-checksums is safe here
                     if ($package -eq 'googlechrome') { $chocoArgs += '--ignore-checksums' }
-                    & choco install @chocoArgs
-                    $chocoExit = $LASTEXITCODE
+
+                    # Redirect stdout to a temp file so we can detect when the download finishes
+                    # and the installer actually starts — only then begin the 5-min kill timer.
+                    # stderr is left unredirected so choco error messages still appear in the console.
+                    $tmpOut = [System.IO.Path]::GetTempFileName()
+                    $proc = Start-Process -FilePath "choco" -ArgumentList $chocoArgs `
+                        -RedirectStandardOutput $tmpOut -NoNewWindow -PassThru
+                    $fs = [System.IO.FileStream]::new(
+                        $tmpOut,
+                        [System.IO.FileMode]::Open,
+                        [System.IO.FileAccess]::Read,
+                        [System.IO.FileShare]::ReadWrite)
+                    $sr = [System.IO.StreamReader]::new($fs)
+                    $downloadCompleteAt = $null  # nil until download finishes; used to start kill timer
+                    $installDeadline    = $null
+                    $killedEarly        = $false
+                    $lastWasProgress    = $false
+                    $chocoNoise = '(?i)' + (@(
+                        '^Chocolatey v'
+                        '^Installing the following packages:'
+                        '^By installing'
+                        '^Downloading package from source'
+                        '\[Approved\]'
+                        'package files install completed\.'
+                        '^Downloading .+ \d+ bit'
+                        '^  from '
+                        'Hashes match\.'
+                        'has been installed\.'
+                        'The install of .+ was successful\.'
+                        "^Deployed to '"
+                        '^Chocolatey installed \d+/\d+ packages\.'
+                        '^See the log for details'
+                        'using locale'
+                        '^\s*$'
+                    ) -join '|')
+                    # dot-sourced so it reads/writes $line and $lastWasProgress from caller scope
+                    $writeChocoLine = {
+                        if ($line -match '^Progress:') {
+                            # Pad to 80 chars so shorter lines fully overwrite longer ones
+                            Write-Host "`r$($line.PadRight(80))" -NoNewline
+                            $lastWasProgress = $true
+                        } elseif ($line -notmatch $chocoNoise) {
+                            if ($lastWasProgress) { Write-Host "" }
+                            Write-Host $line
+                            $lastWasProgress = $false
+                        }
+                    }
+                    try {
+                        while ($true) {
+                            $line = $sr.ReadLine()
+                            while ($null -ne $line) {
+                                . $writeChocoLine
+                                if ($null -eq $downloadCompleteAt -and $line -match '(?i)Download of .+ completed\.') {
+                                    $downloadCompleteAt = [datetime]::UtcNow
+                                    $installDeadline    = $downloadCompleteAt.AddMinutes(5)
+                                    Write-Log "    Download complete - 5 min installer timeout started" -Level Info
+                                }
+                                $line = $sr.ReadLine()
+                            }
+                            if ($proc.WaitForExit(500)) { break }
+                            if ($null -ne $installDeadline -and [datetime]::UtcNow -gt $installDeadline) {
+                                Write-Log "    $package installer running for 5 min - terminating" -Level Warning
+                                $null = & taskkill /T /F /PID $proc.Id 2>&1
+                                Write-Log "    taskkill exit: $LASTEXITCODE" -Level Warning
+                                $killedEarly = $true
+                                break
+                            }
+                        }
+                        while ($null -ne ($line = $sr.ReadLine())) { . $writeChocoLine }
+                    } finally {
+                        $sr.Dispose()
+                        $fs.Dispose()
+                        Remove-Item $tmpOut -Force -ErrorAction SilentlyContinue
+                    }
+                    $chocoExit = if ($killedEarly) { 0 } else { $proc.ExitCode }
 
                     # Verify via choco tracking (--limit-output gives clean name|version format)
                     $localPackage = & choco list --local-only --exact $package --limit-output 2>&1
@@ -483,39 +489,29 @@ Function Clear-DesktopIcons {
     }
 }
 
-Function Enable-DynamicTheme {
-    <#
-    .SYNOPSIS
-        Install Windows Dynamic Theme from a bundled MSIX package (no Store sign-in required)
-    #>
-    Write-Log "Installing Dynamic Theme..."
+Function Install-BingWallpaper {
+    Write-Log "Installing Bing Wallpaper via winget..."
 
-    $msixPath = Join-Path $PSScriptRoot "DynamicTheme.msixbundle"
-
-    if (-not (Test-Path $msixPath)) {
-        Write-Log "Dynamic Theme package not found at '$msixPath'. Skipping." -Level Warning
+    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+        Write-Log "winget not available - skipping Bing Wallpaper" -Level Warning
         return
     }
 
     try {
-        Add-AppxPackage -Path $msixPath -ErrorAction Stop
+        & winget install --id Microsoft.BingWallpaper --source winget --silent `
+            --accept-package-agreements --accept-source-agreements 2>&1 |
+            Where-Object { $_ -match '\S' -and $_ -notmatch '^[\s\-\\|/]+$|^\s*\d+\s*%' } |
+            ForEach-Object { Write-Log "  $_" }
 
-        # Create desktop shortcut
-        $targetPath = "shell:AppsFolder\55888ChristopheLavalle.DynamicTheme_jdggxwd41xcr0!App"
-        $shortcutFile = "$env:USERPROFILE\Desktop\Dynamic Theme.lnk"
+        if ($LASTEXITCODE -notin @(0, 1641, 3010)) {
+            Write-Log "Bing Wallpaper install returned exit code $LASTEXITCODE" -Level Warning
+            return
+        }
 
-        Write-Log "  Creating desktop shortcut"
-        $shell = New-Object -ComObject WScript.Shell
-        $shortcut = $shell.CreateShortcut($shortcutFile)
-        $shortcut.TargetPath = $targetPath
-        $shortcut.Save()
-
-        Write-Log "Dynamic Theme installed" -Level Success
+        Write-Log "Bing Wallpaper installed" -Level Success
     }
     catch {
-        Write-Log "Dynamic Theme installation failed: $_" -Level Error
-        Write-Log "  Exception type: $($_.Exception.GetType().FullName)" -Level Error
-        Write-Log "  Stack trace: $($_.ScriptStackTrace)" -Level Error
+        Write-Log "Bing Wallpaper installation failed: $_" -Level Error
     }
 }
 
@@ -609,10 +605,6 @@ Function Uninstall-Microsoft365 {
 # ============================================================================
 
 try {
-    # Step 0: Remove pre-installed AV software
-    Write-Log "Step 0: Removing pre-installed AV software (2%)"
-    Remove-PreinstalledAV
-
     # Step 1: Install package managers
     Write-Log "Step 1: Installing package managers (5%)"
     Install-PackageManager -Manager chocolatey
@@ -721,11 +713,9 @@ try {
         }
     }
     
-    # Step 8: Install Dynamic Theme
-    if ($windowsInfo.Is11) {
-        Write-Log "Step 8: Installing Dynamic Theme (75%)"
-        Enable-DynamicTheme
-    }
+    # Step 8: Install Bing Wallpaper
+    Write-Log "Step 8: Installing Bing Wallpaper (75%)"
+    Install-BingWallpaper
     
     # Step 9: Uninstall Office
     Write-Log "Step 9: Uninstalling Office (80%)"
@@ -742,11 +732,53 @@ try {
         }
     }
     
+    # Re-apply OEM branding after debloat — Lenovo/HP/Dell services can reset
+    # OEMInformation while their software is still running during earlier steps.
+    if ($deploymentConfig.branded) {
+        $brandingReg = "$PSScriptRoot\Logo_Info.reg"
+        if (Test-Path $brandingReg) {
+            Write-Log "Re-applying OEM branding registry..."
+            try {
+                $null = & "$env:SystemRoot\System32\reg.exe" import "$brandingReg" 2>&1
+                Write-Log "OEM branding applied" -Level Success
+            } catch {
+                Write-Log "OEM branding registry warning: $_" -Level Warning
+            }
+        }
+    }
+
     # Step 11: Set default file associations
     Write-Log "Step 11: Setting default associations (95%)"
     if (Test-Path "$PSScriptRoot\SetUserFTA.exe") {
         try {
-            & "$PSScriptRoot\SetUserFTA.exe" "$PSScriptRoot\assoc.txt"
+            $loggedInUser = (Get-CimInstance -ClassName Win32_ComputerSystem).UserName
+            if (-not $loggedInUser) {
+                Write-Log "  No interactive user detected - skipping file associations" -Level Warning
+            } else {
+                Write-Log "  Running SetUserFTA as $loggedInUser via scheduled task..."
+                $taskName  = "GKScript-SetFileAssoc"
+                $action    = New-ScheduledTaskAction -Execute "$PSScriptRoot\SetUserFTA.exe" `
+                                 -Argument "`"$PSScriptRoot\assoc.txt`""
+                $settings  = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes 2)
+                $principal = New-ScheduledTaskPrincipal -UserId $loggedInUser `
+                                 -LogonType Interactive -RunLevel Limited
+
+                Register-ScheduledTask -TaskName $taskName -Action $action `
+                    -Settings $settings -Principal $principal -Force | Out-Null
+                Start-ScheduledTask -TaskName $taskName
+
+                $deadline = [datetime]::UtcNow.AddSeconds(30)
+                while ((Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue).State -ne 'Ready') {
+                    if ([datetime]::UtcNow -gt $deadline) {
+                        Write-Log "  File association task timed out" -Level Warning
+                        break
+                    }
+                    Start-Sleep -Milliseconds 500
+                }
+
+                Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
+                Write-Log "  File associations set" -Level Success
+            }
         }
         catch {
             Write-Log "Set file associations failed: $_" -Level Warning
@@ -768,10 +800,8 @@ try {
         $originalShell = (Get-ItemProperty -Path $explorerKey -Name Shell -ErrorAction SilentlyContinue).Shell
         Set-ItemProperty -Path $explorerKey -Name Shell -Value '' -Force
 
-        Stop-Process -Name explorer -Force -ErrorAction SilentlyContinue
-        # Wait for Explorer to fully terminate before writing the registry
-        Wait-Process -Name explorer -Timeout 15 -ErrorAction SilentlyContinue
-        Start-Sleep -Seconds 1
+        # Wait-Process is unreliable if Win11 auto-restarts Explorer before we write the registry.
+        Stop-ProcessWithTimeout -Name 'explorer' -TimeoutSeconds 15
 
         $desktopRegFile = if ($deploymentConfig.packages -contains "libreoffice") {
             "$PSScriptRoot\desktop_libreoffice.reg"
@@ -792,7 +822,22 @@ try {
         } else {
             Set-ItemProperty -Path $explorerKey -Name Shell -Value 'explorer.exe' -Force
         }
-        Start-Process explorer.exe
+
+        # Start Explorer as the logged-in user (not elevated) so it properly becomes the shell.
+        # Start-Process from an admin session would launch it elevated, which Windows rejects as shell.
+        $shellUser = (Get-CimInstance -ClassName Win32_ComputerSystem).UserName
+        if ($shellUser) {
+            $explorerAction    = New-ScheduledTaskAction -Execute 'C:\Windows\explorer.exe'
+            $explorerPrincipal = New-ScheduledTaskPrincipal -UserId $shellUser -LogonType Interactive -RunLevel Limited
+            $explorerSettings  = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes 1)
+            Register-ScheduledTask -TaskName 'GKScript-StartExplorer' -Action $explorerAction `
+                -Settings $explorerSettings -Principal $explorerPrincipal -Force | Out-Null
+            Start-ScheduledTask -TaskName 'GKScript-StartExplorer'
+            Start-Sleep -Seconds 2
+            Unregister-ScheduledTask -TaskName 'GKScript-StartExplorer' -Confirm:$false -ErrorAction SilentlyContinue
+        } else {
+            Start-Process explorer.exe
+        }
     }
     catch {
         Write-Log "Explorer restart failed: $_" -Level Warning

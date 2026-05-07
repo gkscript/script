@@ -1,14 +1,14 @@
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="{Binding WindowTitle}" Icon="{Binding IconPath}"
-        Height="Auto" Width="380" MaxHeight="800" MinHeight="200"
+        Height="Auto" Width="440" MaxHeight="800" MinHeight="200"
         ResizeMode="NoResize" SizeToContent="Height" WindowStartupLocation="CenterScreen">
     <Window.Resources>
         <DropShadowEffect x:Key="ButtonShadow" BlurRadius="6" ShadowDepth="3" Opacity="0.4" Direction="315"/>
     </Window.Resources>
     <DockPanel LastChildFill="True">
         <!-- Footer -->
-        <Border DockPanel.Dock="Bottom" 
+        <Border DockPanel.Dock="Bottom"
                 Background="#F5F5F5"
                 BorderThickness="0,1,0,0"
                 BorderBrush="#E0E0E0">
@@ -28,10 +28,10 @@
                            TextDecorations="Underline"/>
             </StackPanel>
         </Border>
-        
+
         <!-- Content -->
         <ScrollViewer Padding="0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-            <StackPanel Orientation="Vertical" HorizontalAlignment="Center" Margin="15,20,15,20">
+            <StackPanel Orientation="Vertical" HorizontalAlignment="Center" Margin="20,20,20,20">
                 <ItemsControl ItemsSource="{Binding MenuItems}">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
@@ -40,7 +40,7 @@
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                            <Border CornerRadius="10" 
+                            <Border CornerRadius="10"
                                     Margin="0,6,0,6"
                                     x:Name="ButtonBorder">
                                 <Border.Background>
@@ -90,16 +90,27 @@
                                         </BeginStoryboard>
                                     </EventTrigger>
                                 </Border.Triggers>
-                                <Button Content="{Binding ButtonText}"
-                                        Background="Transparent"
+                                <Button Background="Transparent"
                                         Foreground="{Binding ForegroundColor}"
-                                        MinHeight="56" MinWidth="200" Padding="15,0,15,0"
+                                        MinHeight="66" MinWidth="200" Padding="15,10,15,10"
                                         BorderThickness="0"
-                                        FontSize="14"
-                                        FontWeight="SemiBold"
-                                        FontFamily="Segoe UI"
                                         Cursor="Hand"
-                                        Tag="{Binding Reference}"/>
+                                        Tag="{Binding Reference}">
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding ButtonText}"
+                                                   FontSize="14"
+                                                   FontWeight="SemiBold"
+                                                   FontFamily="Segoe UI"
+                                                   TextAlignment="Center"/>
+                                        <TextBlock Text="{Binding Description}"
+                                                   FontSize="11"
+                                                   FontFamily="Segoe UI"
+                                                   Foreground="#BDD5FF"
+                                                   TextAlignment="Center"
+                                                   Margin="0,4,0,0"
+                                                   TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                </Button>
                             </Border>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>

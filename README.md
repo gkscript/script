@@ -1,376 +1,125 @@
-# PSScript Setup & Menu GUI
+# gk-script
 
-A comprehensive Windows setup and customization tool with a graphical script menu system. Automates software installation, system configuration, and provides an easy-to-use GUI for launching scripts and applications.
-
-## Features
-
-### Setup Script (`main.ps1`)
-- **Automated Windows Configuration**: Installs software packages, applies registry tweaks, removes bloatware
-- **Pre-flight Validation**: Checks admin rights, internet connectivity, syncs system time, and checks Windows version
-- **Multiple Deployment Types**: Business, Consumer, IT configurations
-- **Comprehensive Logging**: All operations logged to `C:\Logs\PSScriptSetup\`
-- **Resilient Package Installation**: Per-package retries with install verification and Chrome fallback to winget
-- **GPU Support**: Detects and installs NVIDIA, AMD, or Intel GPU drivers automatically
-- **BitLocker Management**: Safely handles encrypted drives
-- **Microsoft 365 Removal**: Uses Office Deployment Tool first, then winget fallback for detected language variants
-- **Error Handling**: Robust error handling with graceful fallbacks
-- **Configuration-Driven**: JSON-based configuration for easy customization
-
-### PSScriptMenuGui Module
-- **WPF GUI Menu**: Modern Windows Presentation Foundation interface
-- **Data Binding**: Clean separation of data model from presentation
-- **CSV-Based Configuration**: Easy menu definition in spreadsheet format
-- **Custom Colors & Icons**: Personalize appearance for your organization
-- **Flexible Execution**: Run scripts, batch files, PowerShell inline code, or launch applications
-- **Optional Descriptions**: Add help text to menu items
+Windows enterprise deployment tool for Netixx IT Solutions. Automates full system setup — software installation, GPU drivers, Office removal, OEM branding, registry tweaks, and bloatware removal — across three deployment profiles. Ships as a self-contained `.exe` with a WPF GUI menu.
 
 ## Requirements
 
-- **Windows 11**
-- **PowerShell 5.1+** (Desktop Edition recommended, Core 7+ also supported)
-- **Administrator Privileges** (required for setup and system modifications)
-- **Internet Connection** (for package downloads)
-- **.NET Framework 4.7+** (for WPF)
-
-## Installation
-
-### Quick Start
-
-1. Clone or download the repository:
-```powershell
-git clone https://github.com/weebsnore/PowerShell-Script-Menu-Gui.git
-cd PSScript
-```
-
-2. Run the setup script with your desired deployment type:
-```powershell
-# As Administrator
-.\src\main.ps1 -DeploymentType consumer
-```
-
-3. Verify configuration in `src/config.json`
-
-### Deployment Types
-
-Choose one based on your needs:
-
-| Type | Packages | Office | Branded |
-|------|----------|--------|---------|
-| `business` | VLC, Firefox, Chrome, 7zip, Adobe Reader | No | Yes |
-| `consumer` | business + LibreOffice, Paint.NET | No | Yes |
-| `consumer-nolo` | business + Paint.NET (no LibreOffice) | No | Yes |
-
-## Usage
-
-### Setup Script
-
-#### Basic Usage
-```powershell
-# Run with default settings
-.\src\main.ps1 -DeploymentType consumer
-
-# Skip bloatware removal
-.\src\main.ps1 -DeploymentType consumer -SkipBloatwareRemoval
-
-# Custom config file
-.\src\main.ps1 -DeploymentType business -ConfigPath C:\CustomConfig\config.json
-
-# Verbose logging
-.\src\main.ps1 -DeploymentType consumer -Verbose
-```
-
-#### Parameters
-- **DeploymentType** (Required): One of `business`, `consumer`, `consumer-nolo`
-- **SkipBloatwareRemoval**: Skip removal of unwanted shortcuts and desktop icons
-- **SkipHideConsole**: Keep PowerShell console visible during execution
-- **ConfigPath**: Custom path to `config.json`
-
-#### What It Does
-1. ✅ Validates administrator rights and internet connectivity
-2. ✅ Synchronizes system time with internet time source
-3. ✅ Checks Windows version
-4. ✅ Installs Chocolatey package manager
-5. ✅ Installs configured software packages (with retries and verification)
-6. ✅ Applies registry customizations
-7. ✅ Detects and installs NVIDIA/AMD/Intel GPU drivers if found
-8. ✅ Removes bloatware and unwanted shortcuts
-9. ✅ Disables BitLocker if encrypted
-10. ✅ Installs Dynamic Theme
-11. ✅ Uninstalls Microsoft 365/Office (all detected language variants)
-12. ✅ Sets default file associations
-13. ✅ Applies desktop icon layout (stops Explorer, writes registry, restarts Explorer)
-14. ✅ Logs all operations to `C:\Logs\PSScriptSetup\`
-
-### PSScriptMenuGui Module
-
-#### Import the Module
-```powershell
-Import-Module .\src\PSScriptMenuGui\PSScriptMenuGui.psm1
-```
-
-#### Create Menu from CSV
-```powershell
-Show-ScriptMenuGui -csvPath '.\menu-items.csv' `
-    -windowTitle 'Company IT Tools' `
-    -buttonBackgroundColor '#366EE8' `
-    -buttonForegroundColor 'White' `
-    -iconPath '.\company-logo.ico'
-```
-
-#### CSV Format
-
-Create a CSV file with this structure:
-
-```csv
-Name,Description,Method,Command,Arguments,Section,Reference
-Restart Computer,Immediately restart the system,powershell_inline,restart-computer -force,,,
-Check Updates,Search Windows Update,cmd,ms-settings:windowsupdate,,,
-Run Script,Execute external script,powershell_file,C:\scripts\deploy.ps1,,,
-Inline Command,Run a one-liner,powershell_inline,Get-Process | Where-Object {$_.CPU -gt 50},,,
-```
-
-**CSV Columns:**
-- **Name**: Button text (required)
-- **Description**: Hover text and column 2 display (optional)
-- **Method**: `cmd`, `powershell_file`, `powershell_inline`, `pwsh_file`, `pwsh_inline` (required)
-- **Command**: Script path or command (required)
-- **Arguments**: Additional command-line arguments (optional)
-- **Section**: Group name (optional; used for visual grouping)
-- **Reference**: Internal identifier (auto-generated if omitted)
-
-#### Menu Examples
-
-Create focused menus for different user groups:
-
-**IT Support Menu:**
-```csv
-Name,Description,Method,Command,Section
-Event Viewer,View Windows logs,cmd,eventvwr.msc,Diagnostics
-Device Manager,Manage hardware devices,cmd,devmgmt.msc,Diagnostics
-Services,Manage Windows services,cmd,services.msc,Diagnostics
-```
-
-**User Self-Service:**
-```csv
-Name,Description,Method,Command,Section
-View Network,Check IP and connection,powershell_inline,ipconfig /all,Network
-Restart,Restart computer safely,powershell_inline,restart-computer -force,System
-Clear Disk Space,Remove temp files,powershell_file,C:\scripts\cleanup.ps1,Maintenance
-```
-
-## Configuration
-
-### config.json
-Centralized settings for deployment:
-
-```json
-{
-  "logging": {
-    "enabled": true,
-    "logPath": "C:\\Logs\\PSScriptSetup",
-    "logLevel": "Info"
-  },
-  "deployment": {
-    "consumer": {
-      "name": "Consumer",
-      "packages": ["vlc", "firefox", "googlechrome"],
-      "branded": true
-    }
-  },
-  "paths": {
-    "installFolder": "C:\\Install",
-    "logoPath": "src/oemlogo.bmp"
-  }
-}
-```
-
-Edit this file to:
-- Add/remove software packages
-- Change installation paths
-- Configure logging behavior
-- Customize registry settings
-
-## Project Structure
-
-```
-script/
-├── README.md                          # This file
-├── build.ps1                          # Builds gk-script.exe (7-Zip SFX)
-├── launch.bat                         # Quick launcher / GUI entry point
-├── src/
-│   ├── main.ps1                       # Setup script
-│   ├── config.json                    # Deployment configuration
-│   ├── debloat.ps1                    # Remove unwanted Windows features
-│   ├── office.xml                     # Office uninstall configuration
-│   ├── assoc.txt                      # File type associations
-│   ├── whitelist.txt                  # Desktop icons to keep
-│   ├── desktop.reg                    # Desktop icon layout (standard)
-│   ├── desktop_libreoffice.reg        # Desktop icon layout (LibreOffice)
-│   ├── icons.reg                      # Hide/show desktop system icons
-│   ├── DynamicTheme.msixbundle        # Bundled Dynamic Theme package
-│   ├── PSScriptMenuGui/               # WPF Menu Module
-│   │   ├── PSScriptMenuGui.psd1       # Module manifest
-│   │   ├── PSScriptMenuGui.psm1       # Module implementation
-│   │   ├── public/
-│   │   │   └── functions.ps1          # Public functions
-│   │   ├── private/
-│   │   │   └── functions.ps1          # Private functions
-│   │   └── xaml/
-│   │       ├── start.xaml             # Main window
-│   │       └── end.xaml               # Window closing
-│   └── lib/
-│       └── PSSetupUtility.psm1        # Shared utility functions
-```
-
-## Key Improvements in main.ps1
-
-### Error Handling
-- Comprehensive try-catch blocks
-- Graceful error recovery
-- Detailed error logging
-
-### Logging
-- Timestamped log entries
-- Color-coded console output
-- Persistent file logging to `C:\Logs\PSScriptSetup\`
-
-### Security
-- Safer Chocolatey installation (downloads to file, not direct pipe-to-iex)
-- Admin rights verification
-- Input validation
-
-### Configuration
-- JSON-based settings (no hardcoding)
-- Extensible design
-- Easy customization
-
-### Code Quality
-- Function-based architecture
-- DRY (Don't Repeat Yourself) principle
-- Clear separation of concerns
-- Comprehensive help documentation
-
-### Compatibility
-- PowerShell 5.1+ compatible
 - Windows 11
-- GPU detection (NVIDIA, AMD, Intel)
-- BitLocker awareness
+- Administrator privileges
+- Internet connection (for package downloads)
+
+## Deploy
+
+Copy `gk-script.exe` to the target machine and double-click it. UAC elevation is handled automatically.
+
+## Profiles
+
+| | Profile | Packages |
+|---|---|---|
+| 💼 | Business | VLC · Firefox · Chrome · 7-Zip · Adobe Reader |
+| 🏠 | Consumer | + LibreOffice · Paint.NET |
+| ⚡ | Consumer (No LibreOffice) | + Paint.NET |
+
+All profiles include: AV removal, GPU driver install, Office 365 uninstall, OEM branding, registry tweaks, bloatware/UWP removal, file associations, desktop layout.
+
+## What it does (in order)
+
+1. Pre-flight checks — admin, internet, disk space (5 GB), Windows version, GPU, BitLocker
+2. Remove pre-installed AV — McAfee, Norton, HP Wolf, Avast, AVG, Trend Micro
+3. Install Chocolatey
+4. Install packages (3-attempt retry + verification per package)
+5. Install GPU drivers — NVIDIA / AMD / Intel auto-detected
+6. Apply registry settings, OEM branding, desktop layout
+7. Remove bloatware shortcuts, clean desktop (whitelist-based)
+8. Disable BitLocker if encrypted
+9. Copy assets to `C:\Install`
+10. Install Dynamic Theme (Windows 11 only)
+11. Uninstall Office 365 (winget + registry fallback + language-variant detection)
+12. Remove UWP bloat (live Win11Debloat list + OEM extras, with offline fallback)
+13. Set default file associations
+14. Apply desktop icon layout, restart Explorer
 
 ## Logs
 
-All operations are logged to: `C:\Logs\PSScriptSetup\setup_YYYYMMDD_HHmmss.log`
+All operations log to `C:\Logs\PSScriptSetup\setup_YYYYMMDD_HHmmss.log`.
 
-View recent logs:
 ```powershell
-Get-ChildItem C:\Logs\PSScriptSetup\ -Filter "*.log" | Sort-Object LastWriteTime -Descending | Select-Object -First 1 | % { notepad $_.FullName }
+# Open the latest log
+Get-ChildItem C:\Logs\PSScriptSetup\ -Filter *.log |
+    Sort-Object LastWriteTime -Descending |
+    Select-Object -First 1 | ForEach-Object { notepad $_.FullName }
 ```
 
-## Troubleshooting
+## Build
 
-### Setup fails with "Access Denied"
-- Run PowerShell as Administrator
-- Disable Windows Defender temporarily (revert after)
-- Check file permissions in `src/` folder
+Requires `makensis.exe` (NSIS) installed.
 
-### Chocolatey installation fails
-- Verify internet connectivity: `Test-Connection 8.8.8.8 -Quiet`
-- Check TLS version: `[Net.ServicePointManager]::SecurityProtocol`
-- Run with verbose: `.\main.ps1 -Verbose`
-
-### Google Chrome is missing after setup
-- Check package-install logs in `C:\Logs\PSScriptSetup\` for `googlechrome`
-- The script retries Chocolatey install up to 3 times, then falls back to `winget` (`Google.Chrome`)
-- Verify winget availability on the target: `winget --version`
-- Manual fallback command: `winget install --id Google.Chrome --silent --accept-package-agreements --accept-source-agreements`
-
-### GUI menu doesn't display
-- Verify .NET Framework 4.7+ is installed
-- Check CSV file exists and is readable
-- Review logs in `C:\Logs\PSScriptSetup\`
-
-### GPU drivers not installing
-- Verify GPU detection: `Get-CimInstance Win32_VideoController`
-- For Intel GPUs, ensure `winget` is available (installed by default on Windows 11)
-- For NVIDIA/AMD, Chocolatey package may be outdated; update and retry
-
-## Module Documentation
-
-### Show-ScriptMenuGui
-Creates and displays a graphical menu from CSV data.
-
-**Syntax:**
 ```powershell
-Show-ScriptMenuGui [-csvPath] <string>
-    [[-windowTitle] <string>]
-    [[-buttonForegroundColor] <string>]
-    [[-buttonBackgroundColor] <string>]
-    [[-iconPath] <string>]
-    [-hideConsole]
-    [-noExit]
-    [<CommonParameters>]
+powershell -ExecutionPolicy Bypass -File build.ps1
 ```
 
-**Example:**
+Output: `gk-script.exe` in the repo root.
+
+## Run without building
+
 ```powershell
-Show-ScriptMenuGui -csvPath 'tools.csv' -windowTitle 'IT Tools' -hideConsole
+# Launch GUI (admin required)
+launch.bat
+
+# Run a profile directly
+powershell -ExecutionPolicy Bypass -File src\main.ps1 -DeploymentType business
+powershell -ExecutionPolicy Bypass -File src\main.ps1 -DeploymentType consumer
+powershell -ExecutionPolicy Bypass -File src\main.ps1 -DeploymentType consumer-nolo
+
+# Optional flags
+-SkipBloatwareRemoval   # Skip bloat/shortcut cleanup
+-SkipHideConsole        # Keep the console window visible
+-ConfigPath <path>      # Use alternate config.json
 ```
 
-### New-ScriptMenuGuiExample
-Creates sample configuration files.
+## Project structure
 
-**Syntax:**
-```powershell
-New-ScriptMenuGuiExample [[-path] <string>] [<CommonParameters>]
+```
+gk-script.exe           ← self-contained deployment exe
+launch.bat              → UAC elevation → PowerShell GUI
+build.ps1               → builds gk-script.exe via NSIS
+src/
+├── main.ps1            → main orchestration script
+├── config.json         → deployment profiles, package lists, paths
+├── gui.csv             → WPF menu button definitions
+├── debloat.ps1         → UWP removal, winget uninstalls, telemetry disable
+├── lib/
+│   └── PSSetupUtility.psm1   → shared utilities (logging, pre-flight, GPU, BitLocker)
+└── PSScriptMenuGui/    → WPF CSV-driven menu module
 ```
 
-**Example:**
-```powershell
-New-ScriptMenuGuiExample -path 'C:\MyMenu'
-```
+## Customisation
 
-## Contributing
-
-Issues and pull requests welcome! Please:
-1. Describe the issue thoroughly
-2. Include log file excerpts if applicable
-3. Specify Windows version and PowerShell version
-4. Test changes before submitting
-
-## License
-
-MIT License - See LICENSE file for details
-
-## Credits
-
-- **Original Module**: Dan O'Sullivan
-- **Refactoring & Improvements**: 2026 Updates
-- **Contributors**: See GitHub repository
+- **Packages**: edit `src/config.json` — add/remove from the `packages` array per profile
+- **Bloat exclusions**: edit `$excluded` set in `src/debloat.ps1`
+- **Desktop icons to keep**: edit `src/whitelist.txt`
+- **OEM branding**: replace `src/oemlogo.bmp` and `src/Logo_Info.reg`
+- **Menu buttons**: edit `src/gui.csv`
 
 ## Changelog
 
-### v2.0.0 (February 2026)
-- ✨ Refactored main.ps1 into modular functions
-- ✨ Added comprehensive logging system
-- ✨ Created JSON-based configuration
-- ✨ Improved error handling and validation
-- ✨ Updated PSScriptMenuGui with WPF data binding
-- ✨ Added utility module with helper functions
-- ✨ Replaced deprecated PowerShell APIs
-- 📖 Added comprehensive documentation
+### v1.1.2 — 2026-05-07
+- Removed redundant GUI header; title bar shows version
+- Emoji-differentiated deployment buttons (💼 🏠 ⚡)
+- Added Lenovo Smart Meeting to bloat removal list
+- Kept Clipchamp from removal
+- Fixed `disable_telemetry.reg` encoding (UTF-16 LE — required by reg.exe)
+- Fixed OEM branding re-apply crash after debloat
 
-### v1.0.1 (Original)
-- Initial release with string-based XAML generation
+### v1.1.1 — 2026-05-07
+- Fixed debloat.ps1 parse error caused by em dash encoding in PS5
+- Live Win11Debloat list fetch with offline fallback
+- OEM branding re-applied after debloat step
 
-## Support
+### v1.1.0
+- consumer-nolo profile (consumer without LibreOffice)
+- Animated WPF button hover effects
+- Gradient button styling
 
-For issues and questions:
-1. Check the logs: `C:\Logs\PSScriptSetup\`
-2. Review this README
-3. Open an issue on GitHub
-4. Contact: [Your Contact Info]
-
----
-
-**Last Updated**: March 2026  
-**PowerShell Version**: 5.1+  
-**Windows Version**: 10, 11
+### v1.0.0
+- Initial release

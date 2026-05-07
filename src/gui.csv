@@ -1,6 +1,4 @@
 Section,Method,Command,Arguments,Name,Description
-Netixx GK,powershell_inline,.\src\main.ps1 -DeploymentType business,,Business,
-Netixx GK,powershell_inline,.\src\main.ps1 -DeploymentType consumer,,Consumer,
-Netixx GK,powershell_inline,.\src\main.ps1 -DeploymentType consumer-nolo,,Consumer (No LibreOffice),
-
-
+Netixx GK,powershell_inline,.\src\main.ps1 -DeploymentType business,,💼 Business,VLC · Firefox · Chrome · 7-Zip · Adobe Reader
+Netixx GK,powershell_inline,.\src\main.ps1 -DeploymentType consumer,,🏠 Consumer,VLC · Firefox · Chrome · 7-Zip · Adobe Reader · LibreOffice · Paint.NET
+Netixx GK,powershell_inline,.\src\main.ps1 -DeploymentType consumer-nolo,,⚡ Consumer (No LibreOffice),VLC · Firefox · Chrome · 7-Zip · Adobe Reader · Paint.NET
