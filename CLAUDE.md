@@ -60,8 +60,7 @@ src/version.txt         → Current version string (e.g. 1.1.2)
 7. Remove bloatware shortcuts and clean desktop via whitelist (`whitelist.txt`)
 8. Disable BitLocker if encrypted
 9. Copy install folder assets to `C:\Install`
-10. Install Dynamic Theme via bundled `DynamicTheme.msixbundle` (Windows 11 only)
-11. Uninstall Office 365 — winget + registry fallback + language-variant detection
+10. Uninstall Office 365 — winget + registry fallback + language-variant detection
 12. Run `debloat.ps1`
 13. Re-apply OEM branding registry (OEM services can reset `OEMInformation` during debloat)
 14. Set file associations via `SetUserFTA.exe` + `assoc.txt`
@@ -107,13 +106,11 @@ src/version.txt         → Current version string (e.g. 1.1.2)
 | `src/icons.reg` | Desktop icon visibility settings |
 | `src/Logo_Info.reg` | OEM branding (Support Info in System Properties) |
 | `src/disable_telemetry.reg` | Windows telemetry disable settings |
-| `src/DynamicTheme.msixbundle` | Bundled Dynamic Theme package |
 | `src/OfficeSetup.exe` | Office deployment tool |
 | `src/SetUserFTA.exe` | File association utility |
 | `src/office.xml` | Office deployment configuration |
 | `src/AutoHotkey32.exe` + `src/chrome.ahk` | Automated Chrome web app removal |
 | `src/netixx.ico` / `src/oemlogo.bmp` | Branding assets |
-| `src/Netixx Helpdesk.exe` | Custom helpdesk shortcut application |
 
 ## Logging
 

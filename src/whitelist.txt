@@ -1,4 +1,3 @@
-Dynamic Theme.lnk
 Firefox.lnk
 Google Chrome.lnk
 Netixx Helpdesk

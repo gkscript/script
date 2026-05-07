@@ -33,8 +33,7 @@ All profiles include: AV removal, GPU driver install, Office 365 uninstall, OEM 
 7. Remove bloatware shortcuts, clean desktop (whitelist-based)
 8. Disable BitLocker if encrypted
 9. Copy assets to `C:\Install`
-10. Install Dynamic Theme (Windows 11 only)
-11. Uninstall Office 365 (winget + registry fallback + language-variant detection)
+10. Uninstall Office 365 (winget + registry fallback + language-variant detection)
 12. Remove UWP bloat (live Win11Debloat list + OEM extras, with offline fallback)
 13. Set default file associations
 14. Apply desktop icon layout, restart Explorer

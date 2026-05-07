@@ -489,31 +489,7 @@ Function Clear-DesktopIcons {
     }
 }
 
-Function Install-BingWallpaper {
-    Write-Log "Installing Bing Wallpaper via winget..."
 
-    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
-        Write-Log "winget not available - skipping Bing Wallpaper" -Level Warning
-        return
-    }
-
-    try {
-        & winget install --id Microsoft.BingWallpaper --source winget --silent `
-            --accept-package-agreements --accept-source-agreements 2>&1 |
-            Where-Object { $_ -match '\S' -and $_ -notmatch '^[\s\-\\|/]+$|^\s*\d+\s*%' } |
-            ForEach-Object { Write-Log "  $_" }
-
-        if ($LASTEXITCODE -notin @(0, 1641, 3010)) {
-            Write-Log "Bing Wallpaper install returned exit code $LASTEXITCODE" -Level Warning
-            return
-        }
-
-        Write-Log "Bing Wallpaper installed" -Level Success
-    }
-    catch {
-        Write-Log "Bing Wallpaper installation failed: $_" -Level Error
-    }
-}
 
 Function Uninstall-Microsoft365 {
     Write-Log "Uninstalling Microsoft 365..."
@@ -706,16 +682,23 @@ try {
             Copy-Item "$PSScriptRoot\oemlogo.bmp" "C:\Windows\System32" -Force
             Write-Log "Copied OEM logo"
         }
-        if (Test-Path "$PSScriptRoot\Netixx Helpdesk.exe") {
-            Copy-Item "$PSScriptRoot\Netixx Helpdesk.exe" $installFolder -Force
-            New-Item -Path "$env:PUBLIC\Desktop\Netixx Helpdesk" -ItemType SymbolicLink -Value "$installFolder\Netixx Helpdesk.exe" -Force -ErrorAction Continue
-            Write-Log "Installed HelpDesk application"
+        try {
+            Write-Log "Downloading Netixx Helpdesk..."
+            # 898.tv serves a TeamViewer QuickSupport page; the actual exe URL is a
+            # time-limited signed Azure Blob obtained by calling the API the page uses.
+            $apiBody = '{"ConfigId":"6ie5cnr","Version":"15","IsCustomModule":true,"Subdomain":"1","ConnectionId":""}'
+            $signedUrl = Invoke-RestMethod -Uri "https://www.898.tv/api/CustomDesign" -Method Post `
+                -ContentType "application/json; charset=utf-8" -Body $apiBody `
+                -UseBasicParsing -TimeoutSec 30 -ErrorAction Stop
+            $helpdeskDest = "$installFolder\Netixx Helpdesk.exe"
+            $wc = New-Object System.Net.WebClient
+            $wc.DownloadFile($signedUrl, $helpdeskDest)
+            New-Item -Path "$env:PUBLIC\Desktop\Netixx Helpdesk" -ItemType SymbolicLink -Value $helpdeskDest -Force -ErrorAction Continue
+            Write-Log "Installed HelpDesk application" -Level Success
+        } catch {
+            Write-Log "HelpDesk download failed: $_" -Level Warning
         }
     }
-    
-    # Step 8: Install Bing Wallpaper
-    Write-Log "Step 8: Installing Bing Wallpaper (75%)"
-    Install-BingWallpaper
     
     # Step 9: Uninstall Office
     Write-Log "Step 9: Uninstalling Office (80%)"
