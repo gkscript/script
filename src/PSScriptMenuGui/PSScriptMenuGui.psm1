@@ -28,3 +28,4 @@ $moduleRoot = $PSScriptRoot
 
 # Shared with the end-of-run result window (src/lib)
 . (Join-Path $PSScriptRoot '..\lib\WindowTheme.ps1')
+. (Join-Path $PSScriptRoot '..\lib\Language.ps1')

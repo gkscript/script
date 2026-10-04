@@ -149,6 +149,55 @@
         </Setter>
     </Style>
 
+    <!-- Focus ring for controls sitting on a colored band: white, so it reads on blue -->
+    <Style x:Key="BandFocusRing">
+        <Setter Property="Control.Template">
+            <Setter.Value>
+                <ControlTemplate>
+                    <Border Margin="-3" CornerRadius="7" BorderBrush="White" BorderThickness="2"
+                            SnapsToDevicePixels="True"/>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Language chip (menu band, top right): quiet by design. Inactive chips use the band's
+         tinted subline color (5.4:1 on Netixx deep blue); the active one is white, semibold,
+         on a faint white fill. Grouped RadioButtons, so exactly one is active. -->
+    <Style x:Key="LanguageChip" TargetType="RadioButton">
+        <Setter Property="Foreground" Value="#DCE6FF"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="Padding" Value="7,2"/>
+        <Setter Property="Margin" Value="2,0,0,0"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="GroupName" Value="UiLanguage"/>
+        <Setter Property="FocusVisualStyle" Value="{StaticResource BandFocusRing}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RadioButton">
+                    <Border x:Name="Chip" CornerRadius="4" Background="Transparent"
+                            BorderBrush="Transparent" BorderThickness="1">
+                        <ContentPresenter Margin="{TemplateBinding Padding}"
+                                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Chip" Property="Background" Value="#1AFFFFFF"/>
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Chip" Property="Background" Value="#2EFFFFFF"/>
+                            <Setter Property="Foreground" Value="White"/>
+                            <Setter Property="FontWeight" Value="SemiBold"/>
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Chip" Property="BorderBrush" Value="White"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- Profile row (menu): Windows 11 settings-card idiom, same surface as ActionButton -->
     <Style x:Key="ProfileRow" TargetType="Button" BasedOn="{StaticResource ActionButton}">
         <Setter Property="Margin" Value="0,0,0,8"/>

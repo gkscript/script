@@ -171,7 +171,7 @@
       "kind": "custom",
       "refersTo": "band-menu",
       "description": "Top field of the profile menu: Netixx deep blue, app mark, display headline, tinted subline.",
-      "html": "<div class=\"ds-band ds-band-menu\"><svg width=\"60\" height=\"60\" viewBox=\"0 0 60 60\" aria-hidden=\"true\"><rect width=\"60\" height=\"60\" rx=\"12\" fill=\"#2F8CE0\"/><rect x=\"10\" y=\"12\" width=\"18\" height=\"16\" rx=\"1.5\" fill=\"#fff\"/><rect x=\"24\" y=\"22\" width=\"26\" height=\"20\" rx=\"2\" fill=\"#fff\" opacity=\".9\"/><circle cx=\"38\" cy=\"44\" r=\"9\" fill=\"#5C6B7A\"/></svg><div><div class=\"ds-band-title\">Netixx Grundkonfiguration</div><div class=\"ds-band-sub\">Choose a setup profile &#183; v1.2.0</div></div></div>",
+      "html": "<div class=\"ds-band ds-band-menu\"><svg width=\"60\" height=\"60\" viewBox=\"0 0 60 60\" aria-hidden=\"true\"><rect width=\"60\" height=\"60\" rx=\"12\" fill=\"#2F8CE0\"/><rect x=\"10\" y=\"12\" width=\"18\" height=\"16\" rx=\"1.5\" fill=\"#fff\"/><rect x=\"24\" y=\"22\" width=\"26\" height=\"20\" rx=\"2\" fill=\"#fff\" opacity=\".9\"/><circle cx=\"38\" cy=\"44\" r=\"9\" fill=\"#5C6B7A\"/></svg><div><div class=\"ds-band-title\">Netixx Grundkonfiguration</div><div class=\"ds-band-sub\">Choose a setup profile &#183; v1.3.0</div></div></div>",
       "css": ".ds-band{display:flex;align-items:center;gap:22px;padding:30px 32px;font-family:\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,sans-serif;width:600px;box-sizing:border-box}.ds-band-menu{background:#2955BC}.ds-band-title{font-family:\"Segoe UI Variable Display\",\"Segoe UI\",system-ui,sans-serif;font-size:32px;font-weight:600;color:#fff}.ds-band-menu .ds-band-sub{font-size:14px;color:#DCE6FF;margin-top:4px}"
     },
     {

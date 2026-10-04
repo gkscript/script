@@ -51,7 +51,9 @@ Function Show-ScriptMenuGui {
         [string]$buttonBackgroundColor = '#366EE8',
         [string]$iconPath = './src/netixx.ico',
         [switch]$hideConsole,
-        [switch]$noExit
+        [switch]$noExit,
+        # Initial UI language (de, en, it); switchable in the menu, passed to scripts via {lang}
+        [string]$language = 'de'
     )
     Write-Verbose 'Show-ScriptMenuGui started'
 
@@ -106,71 +108,41 @@ Function Show-ScriptMenuGui {
     # Same band-into-title-bar treatment as the result window, in Netixx blue
     Set-WindowCaptionColor -Window $form -Background '#2955BC' -Foreground '#FFFFFF'
 
-    # Create data context object
-    $dataContext = New-Object PSObject -Property @{
+    # Everything the window binds to, in the current UI language. Rebuilt (and re-assigned)
+    # when the language changes, since these PSObjects don't raise change notifications.
+    $script:menuState = @{
         WindowTitle = $windowTitle
-        Subtitle = if ($version) { "Choose a setup profile $([char]0xB7) v$version" } else { 'Choose a setup profile' }
+        Version = $version
         IconPath = if ($iconPath) { (Resolve-Path $iconPath).Path } else { $null }
-        MenuItems = @()
+        ButtonBackgroundColor = $buttonBackgroundColor
+        ButtonForegroundColor = $buttonForegroundColor
     }
-    
-    # Build menu items with proper formatting
-    ForEach ($item in $csvData) {
-        $menuItem = New-Object PSObject -Property @{
-            Reference = $item.Reference
-            ButtonText = Get-XamlSafeString $item.Name
-            # Screen-reader name without any leading symbol/emoji in the CSV Name
-            AccessibleName = ($item.Name -replace '^[^\p{L}\p{N}]+', '')
-            # Optional Icon column: Segoe Fluent Icons code point in hex (e.g. E821)
-            IconGlyph = if ($item.Icon) { [string][char][Convert]::ToInt32($item.Icon, 16) } else { '' }
-            IconVisibility = if ($item.Icon) { 'Visible' } else { 'Collapsed' }
-            Description = if ($item.Description) { Get-XamlSafeString $item.Description } else { '' }
-            BackgroundColor = $buttonBackgroundColor
-            ForegroundColor = $buttonForegroundColor
-            OriginalData = $item  # Store original CSV data for action lookup
+    Set-UiLanguage $language
+    $form.DataContext = Get-MenuDataContext
+
+    # One window-level handler for every click: profile rows and language chips. Rows are
+    # regenerated when the language changes, so per-button handlers would be lost.
+    $form.AddHandler([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent, [System.Windows.RoutedEventHandler]{
+        param($origin, $routed)
+        $control = $routed.OriginalSource
+
+        if ($control -is [System.Windows.Controls.RadioButton]) {
+            # Language chip: Tag is the language code
+            Set-UiLanguage $control.Tag
+            $form.DataContext = Get-MenuDataContext
+            return
         }
-        $dataContext.MenuItems += $menuItem
-    }
+        if ($control -isnot [System.Windows.Controls.Button] -or -not $control.Tag) { return }
 
-    # Set DataContext for binding
-    $form.DataContext = $dataContext
-
-    Write-Verbose "Created $($dataContext.MenuItems.Count) menu items"
-
-    # Attach click handlers after window is loaded
-    $form.Add_Loaded( {
-        Write-Verbose 'Window loaded, adding click actions...'
-        
-        # Force layout update and wait on dispatcher to ensure all rendering is complete
-        [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke({
-            $this.UpdateLayout()
-            [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke({
-                Start-Sleep -Milliseconds 300
-                $this.UpdateLayout()
-            }, [System.Windows.Threading.DispatcherPriority]::Render)
-        }, [System.Windows.Threading.DispatcherPriority]::Render)
-        
-        $script:menuButtons = Get-VisualChildren -parent $this -childType ([System.Windows.Controls.Button])
-
-        ForEach ($button in $script:menuButtons) {
-            $button.Add_Click( {
-                param($sender, $eventArgs)
-                Write-Verbose "Button clicked with tag: $($sender.Tag)"
-                # Disable all buttons to prevent double-launching
-                foreach ($btn in $script:menuButtons) {
-                    $btn.IsEnabled = $false
-                }
-                $sender.Content = "Running..."
-                if ($sender.Tag) {
-                    Invoke-ButtonAction $sender.Tag
-                    [System.Windows.Window]::GetWindow($sender).Close()
-                } else {
-                    Write-Error "Button Tag is empty!"
-                }
-            } )
+        Write-Verbose "Button clicked with tag: $($control.Tag)"
+        # Disable all buttons to prevent double-launching
+        foreach ($btn in (Get-VisualChildren -parent $form -childType ([System.Windows.Controls.Button]))) {
+            $btn.IsEnabled = $false
         }
-        Write-Verbose "Attached click handlers to $($script:menuButtons.Count) buttons"
-    } )
+        $control.Content = Get-UiText menu.starting
+        Invoke-ButtonAction $control.Tag
+        $form.Close()
+    })
 
     if ($hideConsole) {
         if ($global:error[0].Exception.CommandInvocation.MyCommand.ModuleName -ne 'PSScriptMenuGui') {

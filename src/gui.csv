@@ -1,4 +1,4 @@
-Section,Method,Command,Arguments,Name,Description,Icon
-Netixx GK,powershell_inline,.\src\main.ps1 -DeploymentType business,,Business,VLC · Firefox · Chrome · 7-Zip · Adobe Reader,E821
-Netixx GK,powershell_inline,.\src\main.ps1 -DeploymentType consumer,,Consumer,VLC · Firefox · Chrome · 7-Zip · Adobe Reader · LibreOffice · Paint.NET,E80F
-Netixx GK,powershell_inline,.\src\main.ps1 -DeploymentType consumer-nolo,,Consumer (No LibreOffice),VLC · Firefox · Chrome · 7-Zip · Adobe Reader · Paint.NET,E945
+Section,Method,Command,Arguments,Name,Description,Icon,NameKey
+Netixx GK,powershell_inline,.\src\main.ps1 -DeploymentType business -Language {lang},,Business,VLC · Firefox · Chrome · 7-Zip · Adobe Reader,E821,profile.business
+Netixx GK,powershell_inline,.\src\main.ps1 -DeploymentType consumer -Language {lang},,Consumer,VLC · Firefox · Chrome · 7-Zip · Adobe Reader · LibreOffice · Paint.NET,E80F,profile.consumer
+Netixx GK,powershell_inline,.\src\main.ps1 -DeploymentType consumer-nolo -Language {lang},,Consumer (No LibreOffice),VLC · Firefox · Chrome · 7-Zip · Adobe Reader · Paint.NET,E945,profile.consumer-nolo

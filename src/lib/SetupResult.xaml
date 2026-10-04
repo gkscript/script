@@ -35,7 +35,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
                 </Grid.ColumnDefinitions>
                 <TextBlock x:Name="Glyph" Grid.Column="0" Style="{StaticResource BandMark}"/>
                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                    <TextBlock x:Name="TitleText" Style="{StaticResource BandTitle}" Text="Setup complete"/>
+                    <TextBlock x:Name="TitleText" Style="{StaticResource BandTitle}"/>
                     <TextBlock x:Name="SubtitleText" Style="{StaticResource BandSubtitle}" Foreground="#DFF6DD"/>
                 </StackPanel>
             </Grid>
@@ -71,8 +71,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
                 </Grid.ColumnDefinitions>
                 <TextBlock Grid.Column="0" Text="&#xE777;" Style="{StaticResource InlineIcon}"
                            Foreground="{StaticResource NetixxBlueDeep}"/>
-                <TextBlock Grid.Column="1" FontWeight="SemiBold" TextWrapping="Wrap"
-                           Text="Restart the PC to finish installing drivers."/>
+                <TextBlock x:Name="RestartText" Grid.Column="1" FontWeight="SemiBold" TextWrapping="Wrap"/>
             </Grid>
 
             <!-- Log path: selectable so it can be copied -->
@@ -81,21 +80,21 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" Text="Log" Style="{StaticResource Caption}" Margin="0,0,10,0"/>
+                <TextBlock x:Name="LogLabel" Grid.Column="0" Style="{StaticResource Caption}" Margin="0,0,10,0"/>
                 <TextBox x:Name="LogPath" Grid.Column="1" IsReadOnly="True" BorderThickness="0" Padding="0"
                          Background="Transparent" FontSize="12" Foreground="{StaticResource TextSecondary}"
-                         TextWrapping="Wrap" SelectionBrush="{StaticResource NetixxBlue}" IsTabStop="False"
-                         AutomationProperties.Name="Log file path"/>
+                         TextWrapping="Wrap" SelectionBrush="{StaticResource NetixxBlue}" IsTabStop="False"/>
             </Grid>
         </StackPanel>
 
         <!-- Actions -->
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="32,22,32,26">
-            <Button x:Name="OpenLogButton" Content="Open log" Style="{StaticResource ActionButton}"
+            <!-- Texts are set from src/lang by Show-SetupResult -->
+            <Button x:Name="OpenLogButton" Style="{StaticResource ActionButton}"
                     AutomationProperties.AutomationId="OpenLog"/>
-            <Button x:Name="RestartButton" Content="Restart now" Style="{StaticResource AccentButton}"
+            <Button x:Name="RestartButton" Style="{StaticResource AccentButton}"
                     Visibility="Collapsed" AutomationProperties.AutomationId="RestartNow"/>
-            <Button x:Name="CloseButton" Content="Close" Style="{StaticResource ActionButton}"
+            <Button x:Name="CloseButton" Style="{StaticResource ActionButton}"
                     IsCancel="True" AutomationProperties.AutomationId="Close"/>
         </StackPanel>
     </StackPanel>

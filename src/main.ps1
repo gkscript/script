@@ -10,7 +10,12 @@ param(
     [switch]$SkipHideConsole,
     
     [Parameter()]
-    [string]$ConfigPath = "$PSScriptRoot\config.json"
+    [string]$ConfigPath = "$PSScriptRoot\config.json",
+
+    # UI language of the result window (the log stays English); the menu passes its choice
+    [Parameter()]
+    [ValidateSet('de', 'en', 'it')]
+    [string]$Language = 'de'
 )
 
 # Stop on first error
@@ -18,15 +23,17 @@ $ErrorActionPreference = 'Stop'
 
 # Import utility functions
 Import-Module "$PSScriptRoot\lib\PSSetupUtility.psm1" -Force
+Set-UiLanguage $Language
 
 $script:StartTime = Get-Date
+$script:CurrentStep = 'start'
 Set-KeepAwake -Enable   # released in the final 'finally' block (or when the process exits)
 
 # Subline for the result window: profile, machine, elapsed time
 Function Get-RunSummary {
     $minutes = [int][math]::Floor(((Get-Date) - $script:StartTime).TotalMinutes)
-    $duration = if ($minutes -lt 1) { 'under a minute' } else { "$minutes min" }
-    $profileName = if ($deploymentConfig) { $deploymentConfig.name } else { $DeploymentType }
+    $duration = if ($minutes -lt 1) { Get-UiText duration.lessThanMinute } else { Get-UiText duration.minutes $minutes }
+    $profileName = Get-UiText "profile.$DeploymentType"
     return ($profileName, $env:COMPUTERNAME, $duration) -join " $([char]0xB7) "
 }
 
@@ -52,8 +59,8 @@ try {
 catch {
     Write-Error "Failed to load configuration from '$ConfigPath': $_"
     # The console closes on exit, so this window is the only thing left on screen
-    Show-SetupResult -Status Failed -Title "Setup didn't start" -Subtitle 'Nothing was changed on this PC' `
-        -Items @("Could not load the configuration file $ConfigPath", "$_")
+    Show-SetupResult -Status Failed -Title (Get-UiText result.notStarted.title) -Subtitle (Get-UiText result.nothingChanged) `
+        -Items @((Get-UiText preflight.config $ConfigPath), "$_")
     exit 1
 }
 
@@ -70,10 +77,16 @@ Write-Log "Available deployment types: $($script:config.deployment.Keys -join ',
 # Pre-flight checks
 try {
     Write-Log "Running pre-flight checks..."
+    # Remembered so the result window can explain a failure in the UI language
+    $preflightCheck = 'admin'
     Test-PrerequisiteAdmin
+    $preflightCheck = 'internet'
     Test-PrerequisiteInternet
+    $preflightCheck = 'other'
     Sync-SystemTimeWithInternet
+    $preflightCheck = 'disk'
     Test-PrerequisiteDiskSpace -requiredBytes $script:config.validation.minDiskSpace
+    $preflightCheck = 'other'
     
     $gpuInfo = Get-SystemGPU
     $bitlockerStatus = Get-BitlockerStatus
@@ -82,8 +95,17 @@ try {
 }
 catch {
     Write-Log "Pre-flight checks failed: $_" -Level Error
-    Show-SetupResult -Status Failed -Title "Setup didn't start" -Subtitle 'Nothing was changed on this PC' `
-        -Items @("$_") -LogFile $script:LogFile
+    $reason = switch ($preflightCheck) {
+        'admin'    { Get-UiText preflight.admin }
+        'internet' { Get-UiText preflight.internet }
+        'disk'     {
+            $freeGb = try { '{0:N1}' -f ((Get-Volume -DriveLetter $env:SystemDrive[0]).SizeRemaining / 1GB) } catch { '?' }
+            Get-UiText preflight.disk @($freeGb, ('{0:N0}' -f ($script:config.validation.minDiskSpace / 1GB)))
+        }
+        default    { Get-UiText preflight.other "$_" }
+    }
+    Show-SetupResult -Status Failed -Title (Get-UiText result.notStarted.title) -Subtitle (Get-UiText result.nothingChanged) `
+        -Items @($reason) -LogFile $script:LogFile
     exit 1
 }
 
@@ -91,8 +113,8 @@ catch {
 $deploymentConfig = $script:config.deployment[$DeploymentType]
 if (-not $deploymentConfig) {
     Write-Log "Invalid deployment type: $DeploymentType" -Level Error
-    Show-SetupResult -Status Failed -Title "Setup didn't start" -Subtitle 'Nothing was changed on this PC' `
-        -Items @("Profile '$DeploymentType' is not defined in config.json.") -LogFile $script:LogFile
+    Show-SetupResult -Status Failed -Title (Get-UiText result.notStarted.title) -Subtitle (Get-UiText result.nothingChanged) `
+        -Items @(Get-UiText preflight.badProfile $DeploymentType) -LogFile $script:LogFile
     exit 1
 }
 
@@ -159,7 +181,7 @@ Function Install-PackageManager {
         }
     }
     catch {
-        Write-Log "Failed to install $Manager : $_" -Level Error
+        Write-Log "Failed to install $Manager : $_" -Level Error -Key warn.chocoFailed -KeyArgs "$_"
         throw
     }
 }
@@ -335,7 +357,7 @@ Function Install-Packages {
                                 # msiexec runs outside choco's process tree; wait for it to release
                                 # the installer mutex so the next attempt/package doesn't fail with 1618
                                 if (-not (Wait-MsiIdle -TimeoutSeconds 120)) {
-                                    Write-Log "    Windows Installer still busy after 2 min" -Level Warning
+                                    Write-Log "    Windows Installer still busy after 2 min" -Level Warning -Key warn.msiBusy
                                 }
                                 break
                             }
@@ -393,7 +415,7 @@ Function Install-Packages {
                     if (Test-PackageInstalledInRegistry -PackageName $package) {
                         $installed = $true
                     } else {
-                        Write-Log "    Failed to install '$package' after retries" -Level Warning
+                        Write-Log "    Failed to install '$package' after retries" -Level Warning -Key warn.pkgFailed -KeyArgs $package
                     }
                 }
             }
@@ -402,7 +424,7 @@ Function Install-Packages {
         }
     }
     catch {
-        Write-Log "Package installation failed: $_" -Level Error
+        Write-Log "Package installation failed: $_" -Level Error -Key warn.pkgFatal -KeyArgs "$_"
         throw
     }
 }
@@ -427,10 +449,10 @@ Function Set-RegistrySettings {
                 & "$env:SystemRoot\System32\reg.exe" import $regFile
                 
                 if ($LASTEXITCODE -ne 0) {
-                    Write-Log "    Registry import returned exit code $LASTEXITCODE" -Level Warning
+                    Write-Log "    Registry import returned exit code $LASTEXITCODE" -Level Warning -Key warn.regImport -KeyArgs (Split-Path $regFile -Leaf), $LASTEXITCODE
                 }
             } else {
-                Write-Log "    Registry file not found: $regFile" -Level Warning
+                Write-Log "    Registry file not found: $regFile" -Level Warning -Key warn.regMissing -KeyArgs (Split-Path $regFile -Leaf)
             }
         }
         
@@ -451,7 +473,7 @@ Function Set-RegistrySettings {
                         Set-ItemProperty -Path $path -Name $valueName -Value $value -Type $type -Force
                     }
                     catch {
-                        Write-Log "    Failed to set registry value: $_" -Level Warning
+                        Write-Log "    Failed to set registry value: $_" -Level Warning -Key warn.regValue -KeyArgs "$path\$valueName"
                     }
                 }
             } else {
@@ -465,7 +487,7 @@ Function Set-RegistrySettings {
                     Set-ItemProperty -Path $path -Name $valueName -Value $value -Type $type -Force
                 }
                 catch {
-                    Write-Log "    Failed to set registry value: $_" -Level Warning
+                    Write-Log "    Failed to set registry value: $_" -Level Warning -Key warn.regValue -KeyArgs "$path\$valueName"
                 }
             }
         }
@@ -473,7 +495,7 @@ Function Set-RegistrySettings {
         Write-Log "Registry settings applied" -Level Success
     }
     catch {
-        Write-Log "Registry settings failed: $_" -Level Error
+        Write-Log "Registry settings failed: $_" -Level Error -Key warn.regFatal -KeyArgs "$_"
         throw
     }
 }
@@ -500,7 +522,7 @@ Function Remove-BloatwareShortcuts {
         Write-Log "Bloatware removal completed" -Level Success
     }
     catch {
-        Write-Log "Bloatware removal failed: $_" -Level Error
+        Write-Log "Bloatware removal failed: $_" -Level Error -Key warn.bloatFatal -KeyArgs "$_"
         throw
     }
 }
@@ -518,7 +540,7 @@ Function Clear-DesktopIcons {
     
     try {
         if (-not (Test-Path $WhitelistPath)) {
-            Write-Log "Whitelist not found: $WhitelistPath" -Level Warning
+            Write-Log "Whitelist not found: $WhitelistPath" -Level Warning -Key warn.whitelistMissing -KeyArgs $WhitelistPath
             return
         }
         
@@ -538,7 +560,7 @@ Function Clear-DesktopIcons {
         Write-Log "Removed $removedCount desktop items" -Level Success
     }
     catch {
-        Write-Log "Desktop cleanup failed: $_" -Level Error
+        Write-Log "Desktop cleanup failed: $_" -Level Error -Key warn.desktopFatal -KeyArgs "$_"
         throw
     }
 }
@@ -656,7 +678,7 @@ Function Uninstall-Microsoft365 {
     }
 
     if (Test-OfficeStillInstalled) {
-        Write-Log "Microsoft 365 may still be partially installed - manual removal may be needed" -Level Warning
+        Write-Log "Microsoft 365 may still be partially installed - manual removal may be needed" -Level Warning -Key warn.officeRemains
     } else {
         Write-Log "Microsoft 365 removed successfully" -Level Success
     }
@@ -711,7 +733,7 @@ Function Install-WindowsUpdateDrivers {
                 Write-Log "  Installed: $($toInstall.Item($i).Title)" -Level Success
             } else {
                 $failed++
-                Write-Log "  Driver update failed (result $code): $($toInstall.Item($i).Title)" -Level Warning
+                Write-Log "  Driver update failed (result $code): $($toInstall.Item($i).Title)" -Level Warning -Key warn.driverFailed -KeyArgs $code, $toInstall.Item($i).Title
             }
         }
         if ($result.RebootRequired) {
@@ -721,7 +743,7 @@ Function Install-WindowsUpdateDrivers {
         Write-Log "Driver updates done: $($toInstall.Count - $failed) installed, $failed failed"
     }
     catch {
-        Write-Log "Windows Update driver install failed: $_" -Level Warning
+        Write-Log "Windows Update driver install failed: $_" -Level Warning -Key warn.driversError -KeyArgs "$_"
     }
 }
 
@@ -732,15 +754,18 @@ Function Install-WindowsUpdateDrivers {
 try {
     # Step 1: Install package managers
     Write-Log "Step 1: Installing package managers (5%)"
+    $script:CurrentStep = 'packageManager'
     Install-PackageManager -Manager chocolatey
 
     # Step 2: Install software packages
     Write-Log "Step 2: Installing software packages (20%)"
+    $script:CurrentStep = 'packages'
     Install-Packages -PackageList $deploymentConfig.packages -Manager chocolatey
 
     # Step 3: Install GPU drivers if applicable
     if ($gpuInfo.IsNvidia) {
         Write-Log "Step 3a: Installing NVIDIA drivers (30%)"
+        $script:CurrentStep = 'gpu'
         Install-Packages -PackageList @('nvidia-app') -Manager chocolatey
     }
     elseif ($gpuInfo.IsAmd) {
@@ -750,27 +775,30 @@ try {
     }
     elseif ($gpuInfo.IsIntel) {
         Write-Log "Step 3a: Installing Intel Graphics drivers (30%)"
+        $script:CurrentStep = 'gpu'
         try {
             # Chocolatey's intel-graphics-driver package downloads from Intel's CDN which often returns 403.
             # Use winget instead, which resolves directly via the official Intel store entry.
             winget install --id Intel.GraphicsCommand --silent --accept-package-agreements --accept-source-agreements
             if ($LASTEXITCODE -ne 0) {
-                Write-Log "Intel Graphics driver install returned exit code $LASTEXITCODE" -Level Warning
+                Write-Log "Intel Graphics driver install returned exit code $LASTEXITCODE" -Level Warning -Key warn.intelExit -KeyArgs $LASTEXITCODE
             } else {
                 Write-Log "Intel Graphics driver installed" -Level Success
             }
         }
         catch {
-            Write-Log "Intel Graphics driver installation failed: $_" -Level Warning
+            Write-Log "Intel Graphics driver installation failed: $_" -Level Warning -Key warn.intelFailed -KeyArgs "$_"
         }
     }
 
     # Step 3b: All pending drivers from Windows Update (GPU incl. AMD, chipset, etc.)
     Write-Log "Step 3b: Installing driver updates from Windows Update (35%)"
+    $script:CurrentStep = 'drivers'
     Install-WindowsUpdateDrivers
     
     # Step 4: Apply registry settings
     Write-Log "Step 4: Applying registry settings (40%)"
+    $script:CurrentStep = 'registry'
     $registryFiles = @()
     if ($deploymentConfig.branded) {
         $registryFiles += "$PSScriptRoot\Logo_Info.reg"
@@ -797,6 +825,7 @@ try {
     # Step 5: Remove bloatware shortcuts
     if (-not $SkipBloatwareRemoval) {
         Write-Log "Step 5: Removing bloatware (50%)"
+        $script:CurrentStep = 'bloat'
         Remove-BloatwareShortcuts -ShortcutPaths $script:config.windows.shortcuts
         Clear-DesktopIcons -WhitelistPath "$PSScriptRoot\whitelist.txt"
     }
@@ -804,17 +833,19 @@ try {
     # Step 6: Disable BitLocker if needed
     if ($bitlockerStatus.IsEncrypted) {
         Write-Log "Step 6: Disabling BitLocker (60%)"
+        $script:CurrentStep = 'bitlocker'
         try {
             Disable-BitLocker -MountPoint "C:"
             Write-Log "BitLocker disabled" -Level Success
         }
         catch {
-            Write-Log "BitLocker disable failed: $_" -Level Warning
+            Write-Log "BitLocker disable failed: $_" -Level Warning -Key warn.bitlocker -KeyArgs "$_"
         }
     }
     
     # Step 7: Copy files to installation folder
     Write-Log "Step 7: Setting up installation folder (70%)"
+    $script:CurrentStep = 'install'
     $installFolder = $script:config.paths.installFolder
     if (-not (Test-Path $installFolder)) {
         $null = New-Item -Path $installFolder -ItemType Directory -Force
@@ -850,22 +881,24 @@ try {
             New-Item -Path "$env:PUBLIC\Desktop\Netixx Helpdesk" -ItemType SymbolicLink -Value $helpdeskDest -Force -ErrorAction Continue
             Write-Log "Installed HelpDesk application" -Level Success
         } catch {
-            Write-Log "HelpDesk download failed: $_" -Level Warning
+            Write-Log "HelpDesk download failed: $_" -Level Warning -Key warn.helpdesk -KeyArgs "$_"
         }
     }
     
     # Step 9: Uninstall Office
     Write-Log "Step 9: Uninstalling Office (80%)"
+    $script:CurrentStep = 'office'
     Uninstall-Microsoft365
     
     # Step 10: Run debloat script
     Write-Log "Step 10: Running debloat script (90%)"
+    $script:CurrentStep = 'debloat'
     if (Test-Path "$PSScriptRoot\debloat.ps1") {
         try {
             & "$PSScriptRoot\debloat.ps1"
         }
         catch {
-            Write-Log "Debloat script failed: $_" -Level Warning
+            Write-Log "Debloat script failed: $_" -Level Warning -Key warn.debloat -KeyArgs "$_"
         }
     }
     
@@ -879,18 +912,19 @@ try {
                 $null = & "$env:SystemRoot\System32\reg.exe" import "$brandingReg" 2>&1
                 Write-Log "OEM branding applied" -Level Success
             } catch {
-                Write-Log "OEM branding registry warning: $_" -Level Warning
+                Write-Log "OEM branding registry warning: $_" -Level Warning -Key warn.branding -KeyArgs "$_"
             }
         }
     }
 
     # Step 11: Set default file associations
     Write-Log "Step 11: Setting default associations (95%)"
+    $script:CurrentStep = 'fta'
     if (Test-Path "$PSScriptRoot\SetUserFTA.exe") {
         try {
             $loggedInUser = (Get-CimInstance -ClassName Win32_ComputerSystem).UserName
             if (-not $loggedInUser) {
-                Write-Log "  No interactive user detected - skipping file associations" -Level Warning
+                Write-Log "  No interactive user detected - skipping file associations" -Level Warning -Key warn.ftaNoUser
             } else {
                 # The script folder lives in the elevated account's %TEMP%, which the
                 # logged-in user may not be able to read - run from C:\Install instead
@@ -924,16 +958,16 @@ try {
                 Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
 
                 if (-not $done) {
-                    Write-Log "File associations: SetUserFTA did not finish within 60 s" -Level Warning
+                    Write-Log "File associations: SetUserFTA did not finish within 60 s" -Level Warning -Key warn.ftaTimeout
                 } elseif ($taskInfo.LastTaskResult -ne 0) {
-                    Write-Log ("File associations: SetUserFTA failed (exit code 0x{0:X})" -f $taskInfo.LastTaskResult) -Level Warning
+                    Write-Log ("File associations: SetUserFTA failed (exit code 0x{0:X})" -f $taskInfo.LastTaskResult) -Level Warning -Key warn.ftaExit -KeyArgs ('0x{0:X}' -f $taskInfo.LastTaskResult)
                 } else {
                     Write-Log "  File associations set" -Level Success
                 }
             }
         }
         catch {
-            Write-Log "Set file associations failed: $_" -Level Warning
+            Write-Log "Set file associations failed: $_" -Level Warning -Key warn.ftaFailed -KeyArgs "$_"
         }
     }
     
@@ -941,6 +975,7 @@ try {
     # The registry write MUST happen while Explorer is dead - otherwise Explorer
     # overwrites IconLayouts with the current layout on shutdown.
     Write-Log "Finalizing... (98%)"
+    $script:CurrentStep = 'finalize'
     try {
         # Prevent Windows from auto-restarting Explorer after we kill it
         $explorerKey = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon'
@@ -960,7 +995,7 @@ try {
             Set-RegistrySettings -RegistryFiles @($desktopRegFile) -RegistryValues @{}
             Write-Log "Desktop icon layout applied" -Level Success
         } else {
-            Write-Log "Desktop reg file not found: $desktopRegFile" -Level Warning
+            Write-Log "Desktop reg file not found: $desktopRegFile" -Level Warning -Key warn.layoutMissing -KeyArgs (Split-Path $desktopRegFile -Leaf)
         }
 
         # Restore shell value so Explorer starts normally and reads the new layout
@@ -987,7 +1022,7 @@ try {
         }
     }
     catch {
-        Write-Log "Explorer restart failed: $_" -Level Warning
+        Write-Log "Explorer restart failed: $_" -Level Warning -Key warn.explorer -KeyArgs "$_"
     }
 
     # Shown last: the technician has usually walked away, and a window before the
@@ -996,26 +1031,32 @@ try {
     if ($issues.Count -eq 0) {
         Write-Log "=== Setup Completed Successfully ===" -Level Success
         Write-Log "Log file: $($script:LogFile)"
-        Show-SetupResult -Status Success -Title 'Setup complete' -Subtitle (Get-RunSummary) `
+        Show-SetupResult -Status Success -Title (Get-UiText result.success.title) -Subtitle (Get-RunSummary) `
             -LogFile $script:LogFile -RebootRequired:([bool]$script:RebootRequired)
     } else {
-        $count = if ($issues.Count -eq 1) { '1 warning' } else { "$($issues.Count) warnings" }
-        Write-Log "=== Setup Finished With $count ===" -Level Success
+        Write-Log "=== Setup Finished With $($issues.Count) Warning(s) ===" -Level Success
         Write-Log "Log file: $($script:LogFile)"
-        Show-SetupResult -Status Warning -Title "Finished with $count" -Subtitle (Get-RunSummary) `
+        $warningTitle = if ($issues.Count -eq 1) { Get-UiText result.warning.title.one } else { Get-UiText result.warning.title.many $issues.Count }
+        Show-SetupResult -Status Warning -Title $warningTitle -Subtitle (Get-RunSummary) `
             -Items $issues -LogFile $script:LogFile -RebootRequired:([bool]$script:RebootRequired)
     }
 }
 catch {
     # Collect earlier warnings before the failure lines below join the list
+    # Plain assignment: Get-LogIssues returns one string[]; @() would nest it as a single item
     $earlier = Get-LogIssues
+    $fatal = $_
     Write-Log "=== Setup Failed ===" -Level Error
     Write-Log "Error: $_" -Level Error
     Write-Log "Stack trace: $($_.ScriptStackTrace)" -Level Error
     Write-Log "Log file: $($script:LogFile)"
 
-    Show-SetupResult -Status Failed -Title 'Setup failed' -Subtitle "$(Get-RunSummary) - stopped before finishing" `
-        -Items (@("$_") + $earlier) -LogFile $script:LogFile
+    # Which step stopped, then what was logged; the raw error only if no keyed line already explains it
+    $items = @(Get-UiText failed.duringStep (Get-UiText "step.$script:CurrentStep")) + $earlier
+    if (-not ($earlier | Where-Object { $_.Contains($fatal.Exception.Message) })) { $items += "$fatal" }
+    Show-SetupResult -Status Failed -Title (Get-UiText result.failed.title) `
+        -Subtitle "$(Get-RunSummary) $([char]0xB7) $(Get-UiText result.stoppedEarly)" `
+        -Items $items -LogFile $script:LogFile
 
     exit 1
 }

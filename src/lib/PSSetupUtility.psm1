@@ -5,6 +5,7 @@
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
 . (Join-Path $PSScriptRoot 'WindowTheme.ps1')
+. (Join-Path $PSScriptRoot 'Language.ps1')
 
 $script:LogIssues = [System.Collections.Generic.List[string]]::new()
 
@@ -42,21 +43,31 @@ Function Write-Log {
     <#
     .SYNOPSIS
         Write to log file and console with timestamp
+    .PARAMETER Key
+        Translation key (src/lang/*.json) for the text the result window shows for this
+        Warning/Error. The log always gets the English -Message.
+    .PARAMETER KeyArgs
+        Values for the {0}, {1} placeholders of -Key
     #>
     param(
         [Parameter(Mandatory)]
         [string]$Message,
-        
+
         [ValidateSet('Info', 'Warning', 'Error', 'Success')]
-        [string]$Level = 'Info'
+        [string]$Level = 'Info',
+
+        [string]$Key,
+
+        [object[]]$KeyArgs = @()
     )
-    
+
     $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
     $logMessage = "[$timestamp] [$Level] $Message"
 
-    # Collected for the end-of-run summary (Get-LogIssues)
+    # Collected for the end-of-run summary (Get-LogIssues), in the UI language when keyed
     if ($Level -in 'Warning', 'Error') {
-        $script:LogIssues.Add($Message.Trim())
+        $shown = if ($Key) { Get-UiText -Key $Key -Arguments $KeyArgs } else { $Message }
+        $script:LogIssues.Add($shown.Trim())
     }
     
     # Write to file
@@ -136,7 +147,7 @@ Function Sync-SystemTimeWithInternet {
         Write-Log "System time synchronization completed" -Level Success
     }
     catch {
-        Write-Log "System time synchronization failed: $_" -Level Warning
+        Write-Log "System time synchronization failed: $_" -Level Warning -Key warn.timeSync -KeyArgs "$_"
     }
 }
 
@@ -210,7 +221,7 @@ Function Get-SystemGPU {
         return $gpuInfo
     }
     catch {
-        Write-Log "Failed to retrieve GPU information: $_" -Level Warning
+        Write-Log "Failed to retrieve GPU information: $_" -Level Warning -Key warn.gpuDetect -KeyArgs "$_"
         return @{ Name = "Unknown"; IsNvidia = $false; IsAmd = $false; IsIntel = $false }
     }
 }
@@ -239,7 +250,7 @@ Function Get-BitlockerStatus {
         }
     }
     catch {
-        Write-Log "BitLocker status check failed: $_" -Level Warning
+        Write-Log "BitLocker status check failed: $_" -Level Warning -Key warn.bitlockerStatus -KeyArgs "$_"
     }
     
     return @{ IsEncrypted = $false; EncryptionPercentage = 0 }
@@ -311,9 +322,9 @@ Function Show-SetupResult {
     # Icons so all three carry the same weight at distance; taskbar progress color.
     # Every text color holds >= 4.5:1 on its band.
     $themes = @{
-        Success = @{ Band = '#107C10'; Fg = '#FFFFFF'; Sub = '#DFF6DD'; Item = '#107C10'; Glyph = 0xEC61; Heading = '';                Taskbar = 'Normal' }
-        Warning = @{ Band = '#FFC83D'; Fg = '#241B00'; Sub = '#4A3A00'; Item = '#9D5D00'; Glyph = 0xE814; Heading = 'Needs attention'; Taskbar = 'Paused' }
-        Failed  = @{ Band = '#C42B1C'; Fg = '#FFFFFF'; Sub = '#FDE7E9'; Item = '#C42B1C'; Glyph = 0xEB90; Heading = 'What went wrong'; Taskbar = 'Error' }
+        Success = @{ Band = '#107C10'; Fg = '#FFFFFF'; Sub = '#DFF6DD'; Item = '#107C10'; Glyph = 0xEC61; Heading = '';                        Taskbar = 'Normal' }
+        Warning = @{ Band = '#FFC83D'; Fg = '#241B00'; Sub = '#4A3A00'; Item = '#9D5D00'; Glyph = 0xE814; Heading = 'result.heading.attention'; Taskbar = 'Paused' }
+        Failed  = @{ Band = '#C42B1C'; Fg = '#FFFFFF'; Sub = '#FDE7E9'; Item = '#C42B1C'; Glyph = 0xEB90; Heading = 'result.heading.failed';    Taskbar = 'Error' }
     }
     $theme = $themes[$Status]
 
@@ -334,7 +345,7 @@ Function Show-SetupResult {
         }
         # A pending restart is part of the outcome, so it joins the band
         if ($RebootRequired -and $Status -ne 'Failed') {
-            $Subtitle = (@($Subtitle, 'Restart required') | Where-Object { $_ }) -join " $([char]0xB7) "
+            $Subtitle = (@($Subtitle, (Get-UiText result.restartRequired)) | Where-Object { $_ }) -join " $([char]0xB7) "
         }
         (& $find 'Band').Background = & $brush $theme.Band
         (& $find 'Glyph').Text = [string][char]$theme.Glyph
@@ -350,14 +361,14 @@ Function Show-SetupResult {
         $nothingListed = $Status -eq 'Success' -or $Items.Count -eq 0
         if ($nothingListed -and $RebootRequired) {
             # The restart is the one thing left; say it as the heading, not under "nothing"
-            $heading.Text = 'Restart the PC to finish installing drivers.'
+            $heading.Text = Get-UiText result.restartLine
             (& $find 'ItemsScroll').Visibility = 'Collapsed'
         } elseif ($nothingListed) {
-            $heading.Text = 'Nothing needs attention.'
+            $heading.Text = Get-UiText result.nothingToDo
             $heading.FontWeight = [System.Windows.FontWeights]::Normal
             (& $find 'ItemsScroll').Visibility = 'Collapsed'
         } else {
-            $heading.Text = $theme.Heading
+            $heading.Text = Get-UiText $theme.Heading
             $list.Tag = & $brush $theme.Item
             $list.ItemsSource = $Items
         }
@@ -371,6 +382,14 @@ Function Show-SetupResult {
 
         $restartButton = & $find 'RestartButton'
         $closeButton = & $find 'CloseButton'
+
+        # Fixed texts in the UI language (src/lang)
+        (& $find 'OpenLogButton').Content = Get-UiText result.button.openLog
+        $restartButton.Content = Get-UiText result.button.restart
+        $closeButton.Content = Get-UiText result.button.close
+        (& $find 'RestartText').Text = Get-UiText result.restartLine
+        (& $find 'LogLabel').Text = Get-UiText result.log
+        [System.Windows.Automation.AutomationProperties]::SetName((& $find 'LogPath'), (Get-UiText result.logPathName))
         if ($RebootRequired) {
             if (-not $nothingListed) { (& $find 'RestartRow').Visibility = 'Visible' }
             $restartButton.Visibility = 'Visible'
@@ -397,7 +416,7 @@ Function Show-SetupResult {
     catch {
         Write-Log "Result window failed, falling back to MessageBox: $_" -Level Warning
         $icon = @{ Success = 'Information'; Warning = 'Warning'; Failed = 'Error' }[$Status]
-        $text = (@($Title, $Subtitle) + @($Items) + @($(if ($RebootRequired) { 'Restart the PC to finish installing drivers.' }), $(if ($LogFile) { "Log file: $LogFile" }))) |
+        $text = (@($Title, $Subtitle) + @($Items) + @($(if ($RebootRequired) { Get-UiText result.restartLine }), $(if ($LogFile) { Get-UiText result.logFile $LogFile }))) |
             Where-Object { $_ } | Out-String
         $null = [System.Windows.Forms.MessageBox]::Show($text.Trim(), 'Netixx Grundkonfiguration', 'OK', $icon)
     }
@@ -464,6 +483,9 @@ Export-ModuleMember -Function @(
     'Get-LogIssues'
     'Show-SetupResult'
     'Set-KeepAwake'
+    'Set-UiLanguage'
+    'Get-UiLanguage'
+    'Get-UiText'
     'Test-PrerequisiteAdmin'
     'Test-PrerequisiteInternet'
     'Sync-SystemTimeWithInternet'

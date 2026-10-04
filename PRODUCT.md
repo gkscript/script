@@ -38,7 +38,7 @@ It encodes Netixx's own house standard for a delivered PC: the package set, the 
 - It needs admin rights, an internet connection and 5 GB of free disk space. It exits if pre-flight checks fail.
 - Most steps fail soft: they log a warning and the run continues. Only pre-flight, Chocolatey and package-install failures abort.
 - The GUI is the vendored PSScriptMenuGui module and is driven only by `gui.csv`.
-- UI language is **not a constraint**. The current labels are English and the target OS is German, and the user doesn't mind which language the UI uses.
+- UI languages: **German (default), English, Italian**. The technician switches with a subtle selector in the menu, and the choice carries over to the result window. Netixx serves German- and Italian-speaking customers. The log file stays English for support.
 
 ## Brand Commitments
 

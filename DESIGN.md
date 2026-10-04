@@ -167,7 +167,7 @@ A disciplined palette: one brand blue in two strengths, three status signals, an
 
 ### Hierarchy
 - **Display** (600, 32px): the band headline, one per window ("Netixx Grundkonfiguration", "Setup complete", "Finished with 3 warnings").
-- **Subline** (400, 14px): the single line under the headline (profile, machine, duration; or "Choose a setup profile · v1.2.0").
+- **Subline** (400, 14px): the single line under the headline (profile, machine, duration; or "Choose a setup profile · v1.3.0").
 - **Title** (600, 15px): the profile name in a profile row.
 - **Heading** (600, 14px): the one section heading below the band ("Needs attention", "What went wrong").
 - **Body** (400, 13px, 19px line height): list items, button labels, the restart line.
@@ -224,6 +224,14 @@ The colored top field of every window, and the system's signal.
 - **Result:** the status color, with the solid status mark (60 px glyph), a status headline and a subline (profile · machine · duration, plus "Restart required" when pending).
 - **Reach:** DWM paints the title bar and window border in the band color, so the band starts at the window's top edge. Result windows also set a full green, amber or red taskbar button (`TaskbarItemInfo`).
 
+### Language Chips
+Quiet DE · EN · IT selector in the top-right corner of the menu band, sitting in the band's top padding. The chips are grouped radio buttons (`LanguageChip`), 12px, with 7 px × 2 px padding and a 4px radius.
+- **Inactive:** the band's tinted subline color, with no fill.
+- **Active:** white semibold on a faint white fill (18%).
+- **Hover:** 10% white fill.
+- **Focus:** white 1 px stroke plus the white `BandFocusRing`, because an ink ring would disappear on blue.
+- **Labels and names:** the labels are language codes and never get translated. The screen-reader names use each language's own name (Deutsch, English, Italiano).
+
 ### Attention List
 The body of a warning or failure result: a Heading, then items made of a 13 px triangle icon (`caution-icon`, or `fault-red` for failures) and body text, 9 px apart, scrolling past 232 px. When nothing needs attention it collapses to one plain line. When a restart is the only open item, the restart becomes the heading.
 
@@ -235,6 +243,7 @@ The body of a warning or failure result: a Heading, then items made of a 13 px t
 - **Do** check every text color against its band at 4.5:1 or better. Use the band's own tinted subline color (`*-subline`).
 - **Do** use Segoe Fluent Icons for every icon, with solid glyphs for band marks.
 - **Do** keep at most one Netixx-signal-blue accent button per window.
+- **Do** take every visible string from `src/lang/<code>.json` (German default, English, Italian). Check new copy in German, because it runs about 30% longer than English ("Einrichtung abgeschlossen").
 
 ### Don't:
 - **Don't** create a window with its own layout or local styles that bypass the theme. A new window is another instance of the same anatomy, and a style change goes into `Theme.xaml`.

@@ -30,6 +30,7 @@ launch.bat   # UAC self-elevation via VBS, then Show-ScriptMenuGui -csvpath .\sr
 powershell -ExecutionPolicy Bypass -File src\main.ps1 -DeploymentType business|consumer|consumer-nolo
     [-SkipBloatwareRemoval]   # skips Step 5 (shortcut cleanup + desktop whitelist) only; debloat.ps1 still runs
     [-ConfigPath <path>]      # alternate config.json
+    [-Language de|en|it]      # UI language of the result window (default de); the log stays English
 ```
 
 `-SkipHideConsole` is declared in `main.ps1` but currently does nothing.
@@ -42,7 +43,7 @@ gk-script.exe (NSIS) → launch.bat → PSScriptMenuGui (reads src/gui.csv) → 
                                                                              └─ src/debloat.ps1 (dot-invoked, same session)
 ```
 
-- **`src/gui.csv`** is the only input to the vendored `PSScriptMenuGui` module. Each row is one button: `Section, Method (powershell_inline), Command, Arguments, Name, Description, Icon`. `Icon` is an optional Segoe Fluent Icons code point in hex (e.g. `E821`, a briefcase), drawn beside the name. Keep emoji out of `Name`, because screen readers announce them. To add or rename a profile button, edit this file. Profile names must also match `ValidateSet` in `main.ps1` and a key under `deployment` in `config.json`.
+- **`src/gui.csv`** is the only input to the vendored `PSScriptMenuGui` module. Each row is one button: `Section, Method (powershell_inline), Command, Arguments, Name, Description, Icon, NameKey`. `{lang}` in `Command` is replaced with the menu's current language when the row is launched. `NameKey` points to a translated name in `src/lang` (it falls back to `Name`). `Icon` is an optional Segoe Fluent Icons code point in hex (e.g. `E821`, a briefcase), drawn beside the name. Keep emoji out of `Name`, because screen readers announce them. To add or rename a profile button, edit this file. Profile names must also match `ValidateSet` in `main.ps1` and a key under `deployment` in `config.json`.
 - **`src/config.json`** defines the profiles (`packages` = Chocolatey IDs, `branded` flag), the install folder, the start-menu shortcuts to delete, the log path and the minimum disk space. `main.ps1` converts only the **top level** of the config to hashtables. Nested objects like `deployment.<profile>` stay `PSCustomObject`.
 - **`src/lib/PSSetupUtility.psm1`**: `Write-Log`, `Initialize-Logging`, `Test-Prerequisite*`, `Sync-SystemTimeWithInternet`, `Get-SystemGPU`, `Get-BitlockerStatus`, `Invoke-SafeProcess`, `Invoke-NativeCommand`, `Get-LogIssues`, `Set-KeepAwake`, `Show-SetupResult`. `debloat.ps1` runs in the same session, so these are available there too, although it currently logs with `Write-Output`.
 - **Result window**: `Show-SetupResult` loads `src/lib/SetupResult.xaml`, a WPF window with Success, Warning and Failed states. It replaces every MessageBox in the run. The status color fills the band, the title bar (DWM caption color) and the taskbar button (`TaskbarItemInfo`), so the outcome reads from across the room. If the XAML fails to load, the function falls back to a MessageBox, because this window is the only result signal. The design contract is the comment at the top of the XAML.
@@ -79,6 +80,8 @@ The step numbers below match the `Write-Log "Step N"` messages in the code. Ther
 - Final: the Explorer dance (see below), then the result window. It must come last, because a modal window would hold back the layout step until someone clicks it. If anything was logged at Warning/Error level, the window shows the yellow "Finished with N warnings" state and lists them (`Get-LogIssues`). Otherwise it shows green "Setup complete". A pending driver reboot adds "Restart required" and a **Restart now** button. Nothing restarts automatically.
 
 Most steps catch their own errors and log a Warning so the run can continue. Only pre-flight, Chocolatey and package failures abort.
+
+**Languages.** The UI is German by default, with English and Italian available; the menu has DE/EN/IT chips in the band. Every user-visible string lives in `src/lang/<code>.json` (UTF-8, so umlauts never enter a `.ps1`), and is read with `Get-UiText <key> [args]` from `src/lib/Language.ps1`. A missing key falls back to English, then to the key itself. All three files must keep the same keys. For any Warning/Error a technician may see, call `Write-Log "English text" -Level Warning -Key warn.<name> -KeyArgs ...`: the log gets the English message, and the result window gets the translation. The failure window names the step that stopped via `$script:CurrentStep` (`step.<name>` keys); set it when adding a step.
 
 **Log levels are user-facing.** Every `Warning`/`Error` line ends up in the end-of-run box the technician sees. Use `Warning` only for an **outcome** (e.g. a package failed after all retries, or Office is still installed). Intermediate states such as "attempt 1 not confirmed", "falling back to winget" or "ODT failed, trying winget" are logged at `Info`. Messages from `debloat.ps1` (`Write-Output`) are not collected.
 

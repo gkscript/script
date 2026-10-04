@@ -12,6 +12,8 @@ Windows enterprise deployment tool for Netixx IT Solutions. Automates full syste
 
 Copy `gk-script.exe` to the target machine and double-click it. UAC elevation is handled automatically.
 
+The menu opens in German. Switch to English or Italian with **DE · EN · IT** in the top-right corner; the result window follows that choice.
+
 ## Profiles
 
 | | Profile | Packages |
@@ -76,6 +78,7 @@ powershell -ExecutionPolicy Bypass -File src\main.ps1 -DeploymentType consumer-n
 -SkipBloatwareRemoval   # Skip bloat/shortcut cleanup
 -SkipHideConsole        # Keep the console window visible
 -ConfigPath <path>      # Use alternate config.json
+-Language de|en|it     # Result window language (default: de)
 ```
 
 ## Project structure
@@ -105,8 +108,14 @@ src/
 - **OEM branding**: replace `src/oemlogo.bmp` and `src/Logo_Info.reg`
 - **Menu buttons**: edit `src/gui.csv` (`Icon` = Segoe Fluent Icons code, e.g. `E821`)
 - **Window look**: edit `src/lib/Theme.xaml` (rules in `DESIGN.md`)
+- **Texts / translations**: edit `src/lang/de.json`, `en.json`, `it.json` (same keys in all three)
 
 ## Changelog
+
+### v1.3.0 — 2026-10-04
+- Multilingual UI: German (default), English, Italian, switchable in the menu (DE · EN · IT); menu, result window and the listed warnings are translated, the log stays English
+- The failure window names the step that stopped, and pre-flight failures get a plain-language reason
+- Fixed: warnings could collapse into one "System.String[]" line in the failure window
 
 ### v1.2.0 — 2026-10-04
 - New result window replaces all message boxes: green / yellow / red status band (also in title bar and taskbar), warnings listed, Open log, Restart now when drivers need it

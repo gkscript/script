@@ -31,12 +31,26 @@
                     <TextBlock Style="{StaticResource BandTitle}" Text="Netixx Grundkonfiguration"/>
                     <TextBlock Style="{StaticResource BandSubtitle}" Foreground="#DCE6FF" Text="{Binding Subtitle}"/>
                 </StackPanel>
+                <!-- Language: quiet chips in the band's top-right corner (Tag = language code).
+                     Codes are language-neutral, so they stay the same in every language. -->
+                <StackPanel Grid.Column="0" Grid.ColumnSpan="2" Orientation="Horizontal"
+                            HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-20,-18,0">
+                    <RadioButton Style="{StaticResource LanguageChip}" Content="DE" Tag="de"
+                                 IsChecked="{Binding IsDe, Mode=OneWay}" ToolTip="Deutsch"
+                                 AutomationProperties.Name="Deutsch" AutomationProperties.AutomationId="LangDe"/>
+                    <RadioButton Style="{StaticResource LanguageChip}" Content="EN" Tag="en"
+                                 IsChecked="{Binding IsEn, Mode=OneWay}" ToolTip="English"
+                                 AutomationProperties.Name="English" AutomationProperties.AutomationId="LangEn"/>
+                    <RadioButton Style="{StaticResource LanguageChip}" Content="IT" Tag="it"
+                                 IsChecked="{Binding IsIt, Mode=OneWay}" ToolTip="Italiano"
+                                 AutomationProperties.Name="Italiano" AutomationProperties.AutomationId="LangIt"/>
+                </StackPanel>
             </Grid>
         </Border>
 
         <!-- Footer -->
         <TextBlock DockPanel.Dock="Bottom" Style="{StaticResource Caption}" TextAlignment="Center"
-                   Margin="32,10,32,22" Text="Created for the people by www.netixx.it"/>
+                   Margin="32,10,32,22" Text="{Binding Footer}"/>
 
         <!-- Profiles -->
         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">

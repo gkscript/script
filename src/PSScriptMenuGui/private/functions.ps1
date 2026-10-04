@@ -74,14 +74,56 @@ Note that this module does not currently work with PowerShell 7-preview and the 
     return $form
 }
 
+Function Get-MenuDataContext {
+    <#
+    .SYNOPSIS
+        Build the object the menu window binds to, in the current UI language
+    #>
+    $state = $script:menuState
+    $lang = Get-UiLanguage
+
+    $subtitle = Get-UiText menu.subtitle
+    if ($state.Version) { $subtitle = "$subtitle $([char]0xB7) v$($state.Version)" }
+
+    $items = foreach ($item in $script:csvData) {
+        # NameKey column: translated name from src/lang; falls back to the CSV Name
+        $name = if ($item.NameKey) { Get-UiText $item.NameKey } else { $item.Name }
+        New-Object PSObject -Property @{
+            Reference = $item.Reference
+            ButtonText = $name
+            # Screen-reader name without any leading symbol/emoji
+            AccessibleName = ($name -replace '^[^\p{L}\p{N}]+', '')
+            # Optional Icon column: Segoe Fluent Icons code point in hex (e.g. E821)
+            IconGlyph = if ($item.Icon) { [string][char][Convert]::ToInt32($item.Icon, 16) } else { '' }
+            IconVisibility = if ($item.Icon) { 'Visible' } else { 'Collapsed' }
+            Description = if ($item.Description) { $item.Description } else { '' }
+            BackgroundColor = $state.ButtonBackgroundColor
+            ForegroundColor = $state.ButtonForegroundColor
+            OriginalData = $item
+        }
+    }
+
+    New-Object PSObject -Property @{
+        WindowTitle = $state.WindowTitle
+        Subtitle = $subtitle
+        Footer = Get-UiText menu.footer
+        IconPath = $state.IconPath
+        MenuItems = @($items)
+        IsDe = $lang -eq 'de'
+        IsEn = $lang -eq 'en'
+        IsIt = $lang -eq 'it'
+    }
+}
+
 Function Invoke-ButtonAction {
     param(
         [Parameter(Mandatory)][string]$buttonName
     )
     Write-Verbose "$buttonName clicked"
 
-    # Get relevant CSV row
-    $csvMatch = $script:csvData | Where-Object {$_.Reference -eq $buttonName}
+    # Get relevant CSV row (a copy: the {lang} placeholder is filled per launch)
+    $csvMatch = $script:csvData | Where-Object {$_.Reference -eq $buttonName} | Select-Object *
+    $csvMatch.Command = $csvMatch.Command.Replace('{lang}', (Get-UiLanguage))
     Write-Verbose $csvMatch
 
     # Pipe match to Start-Script function
