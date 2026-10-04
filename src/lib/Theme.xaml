@@ -1,0 +1,158 @@
+<!--
+  Shared design system for every gk-script window (profile menu + result window).
+  Get-ThemedXaml (src/lib/WindowTheme.ps1) injects these resources at each window's
+  <!-THEME-> placeholder before parsing, so StaticResource works and the windows can
+  never drift apart. Change a value here and both windows change.
+
+  Anatomy every window follows: 600 px wide; a solid band on top (status color, or Netixx
+  blue for the menu) that also colors the title bar; a 60 px mark + 32 px display headline
+  + 14 px subline in the band; calm Mica below with 32 px side margins.
+  Corners 6 px; translucent-white controls on Mica; one Netixx-blue accent.
+  Keep this file ASCII (PowerShell 5.1 reads it with -Encoding UTF8, but stay safe).
+-->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Palette -->
+    <SolidColorBrush x:Key="TextPrimary" Color="#1A1A1A"/>
+    <SolidColorBrush x:Key="TextSecondary" Color="#5C5C5C"/>
+    <SolidColorBrush x:Key="NetixxBlue" Color="#366EE8"/>
+    <SolidColorBrush x:Key="NetixxBlueDeep" Color="#2955BC"/>
+    <SolidColorBrush x:Key="ControlFill" Color="#B3FFFFFF"/>
+    <SolidColorBrush x:Key="ControlFillHover" Color="#E6FFFFFF"/>
+    <SolidColorBrush x:Key="ControlFillPressed" Color="#80FFFFFF"/>
+    <SolidColorBrush x:Key="ControlStroke" Color="#24000000"/>
+    <CornerRadius x:Key="ControlCorner">6</CornerRadius>
+
+    <!-- Type ramp -->
+    <Style x:Key="BandTitle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="Segoe UI Variable Display, Segoe UI"/>
+        <Setter Property="FontSize" Value="32"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="White"/>
+        <Setter Property="TextWrapping" Value="Wrap"/>
+    </Style>
+    <Style x:Key="BandSubtitle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="TextWrapping" Value="Wrap"/>
+        <Setter Property="Margin" Value="0,4,0,0"/>
+    </Style>
+    <Style x:Key="BandMark" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets"/>
+        <Setter Property="FontSize" Value="60"/>
+        <Setter Property="Foreground" Value="White"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="Margin" Value="0,0,22,0"/>
+    </Style>
+    <Style x:Key="SectionHeading" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Margin" Value="0,0,0,10"/>
+    </Style>
+    <Style x:Key="Caption" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
+    </Style>
+    <Style x:Key="InlineIcon" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets"/>
+        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="Margin" Value="0,2,0,0"/>
+    </Style>
+
+    <!-- Band: the colored top field of every window -->
+    <Style x:Key="Band" TargetType="Border">
+        <Setter Property="Padding" Value="32,30,32,30"/>
+    </Style>
+
+    <!-- Keyboard-only focus ring: WPF shows FocusVisualStyle for keyboard navigation,
+         never after a mouse click -->
+    <Style x:Key="FocusRing">
+        <Setter Property="Control.Template">
+            <Setter.Value>
+                <ControlTemplate>
+                    <Border Margin="-4" CornerRadius="9" BorderBrush="#1A1A1A" BorderThickness="2"
+                            SnapsToDevicePixels="True"/>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Translucent-white control on Mica, shared template for buttons and profile rows.
+         An IsKeyboardFocused stroke backs up the focus ring (which depends on WPF's
+         keyboard-cue heuristics). -->
+    <ControlTemplate x:Key="ControlSurface" TargetType="Button">
+        <Border x:Name="Face" CornerRadius="{StaticResource ControlCorner}"
+                Background="{TemplateBinding Background}"
+                BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1">
+            <ContentPresenter Margin="{TemplateBinding Padding}"
+                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+        </Border>
+        <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Face" Property="Background" Value="{StaticResource ControlFillHover}"/>
+            </Trigger>
+            <Trigger Property="IsPressed" Value="True">
+                <Setter TargetName="Face" Property="Background" Value="{StaticResource ControlFillPressed}"/>
+            </Trigger>
+            <Trigger Property="IsKeyboardFocused" Value="True">
+                <Setter TargetName="Face" Property="BorderBrush" Value="#1A1A1A"/>
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter TargetName="Face" Property="Opacity" Value="0.55"/>
+            </Trigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <!-- Standard button -->
+    <Style x:Key="ActionButton" TargetType="Button">
+        <Setter Property="MinWidth" Value="104"/>
+        <Setter Property="Padding" Value="16,7"/>
+        <Setter Property="Margin" Value="8,0,0,0"/>
+        <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+        <Setter Property="Background" Value="{StaticResource ControlFill}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource ControlStroke}"/>
+        <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Template" Value="{StaticResource ControlSurface}"/>
+    </Style>
+
+    <!-- Accent button: Netixx blue, white text 4.6:1 -->
+    <Style x:Key="AccentButton" TargetType="Button" BasedOn="{StaticResource ActionButton}">
+        <Setter Property="Foreground" Value="White"/>
+        <Setter Property="Background" Value="{StaticResource NetixxBlue}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource NetixxBlueDeep}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Face" CornerRadius="{StaticResource ControlCorner}"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1">
+                        <ContentPresenter Margin="{TemplateBinding Padding}"
+                                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Face" Property="Background" Value="#2F62D3"/>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Face" Property="Background" Value="{StaticResource NetixxBlueDeep}"/>
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Face" Property="BorderBrush" Value="#1A1A1A"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Profile row (menu): Windows 11 settings-card idiom, same surface as ActionButton -->
+    <Style x:Key="ProfileRow" TargetType="Button" BasedOn="{StaticResource ActionButton}">
+        <Setter Property="Margin" Value="0,0,0,8"/>
+        <Setter Property="Padding" Value="18,14,16,14"/>
+        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+    </Style>
+</ResourceDictionary>

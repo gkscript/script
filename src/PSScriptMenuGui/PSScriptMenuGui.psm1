@@ -25,3 +25,6 @@ ForEach ($script in $scripts) {
 
 # Used to get files from xaml and examples subfolders
 $moduleRoot = $PSScriptRoot
+
+# Shared with the end-of-run result window (src/lib)
+. (Join-Path $PSScriptRoot '..\lib\WindowTheme.ps1')

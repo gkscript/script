@@ -95,17 +95,21 @@ Function Show-ScriptMenuGui {
         $i++
     }
 
-    # Build complete XAML from template files
-    $xamlStart = Get-Content "$moduleRoot\xaml\start.xaml" -Raw
-    $xamlEnd = Get-Content "$moduleRoot\xaml\end.xaml" -Raw
-    $xaml = $xamlStart + $xamlEnd
+    # Build complete XAML from template files, with the shared gk-script theme injected
+    $xamlStart = Get-Content "$moduleRoot\xaml\start.xaml" -Raw -Encoding UTF8
+    $xamlEnd = Get-Content "$moduleRoot\xaml\end.xaml" -Raw -Encoding UTF8
+    $xaml = Get-ThemedXaml ($xamlStart + $xamlEnd)
 
     Write-Verbose 'Creating XAML objects...'
     $form = New-GuiForm -inputXml $xaml
+    Enable-WindowBackdrop -Window $form
+    # Same band-into-title-bar treatment as the result window, in Netixx blue
+    Set-WindowCaptionColor -Window $form -Background '#2955BC' -Foreground '#FFFFFF'
 
     # Create data context object
     $dataContext = New-Object PSObject -Property @{
         WindowTitle = $windowTitle
+        Subtitle = if ($version) { "Choose a setup profile $([char]0xB7) v$version" } else { 'Choose a setup profile' }
         IconPath = if ($iconPath) { (Resolve-Path $iconPath).Path } else { $null }
         MenuItems = @()
     }
@@ -115,6 +119,11 @@ Function Show-ScriptMenuGui {
         $menuItem = New-Object PSObject -Property @{
             Reference = $item.Reference
             ButtonText = Get-XamlSafeString $item.Name
+            # Screen-reader name without any leading symbol/emoji in the CSV Name
+            AccessibleName = ($item.Name -replace '^[^\p{L}\p{N}]+', '')
+            # Optional Icon column: Segoe Fluent Icons code point in hex (e.g. E821)
+            IconGlyph = if ($item.Icon) { [string][char][Convert]::ToInt32($item.Icon, 16) } else { '' }
+            IconVisibility = if ($item.Icon) { 'Visible' } else { 'Collapsed' }
             Description = if ($item.Description) { Get-XamlSafeString $item.Description } else { '' }
             BackgroundColor = $buttonBackgroundColor
             ForegroundColor = $buttonForegroundColor
@@ -151,7 +160,7 @@ Function Show-ScriptMenuGui {
                 foreach ($btn in $script:menuButtons) {
                     $btn.IsEnabled = $false
                 }
-                $sender.Content = "Running…"
+                $sender.Content = "Running..."
                 if ($sender.Tag) {
                     Invoke-ButtonAction $sender.Tag
                     [System.Windows.Window]::GetWindow($sender).Close()

@@ -19,6 +19,17 @@ $ErrorActionPreference = 'Stop'
 # Import utility functions
 Import-Module "$PSScriptRoot\lib\PSSetupUtility.psm1" -Force
 
+$script:StartTime = Get-Date
+Set-KeepAwake -Enable   # released in the final 'finally' block (or when the process exits)
+
+# Subline for the result window: profile, machine, elapsed time
+Function Get-RunSummary {
+    $minutes = [int][math]::Floor(((Get-Date) - $script:StartTime).TotalMinutes)
+    $duration = if ($minutes -lt 1) { 'under a minute' } else { "$minutes min" }
+    $profileName = if ($deploymentConfig) { $deploymentConfig.name } else { $DeploymentType }
+    return ($profileName, $env:COMPUTERNAME, $duration) -join " $([char]0xB7) "
+}
+
 # Load configuration first (to get log path from config)
 try {
     $configObject = Get-Content $ConfigPath -Raw | ConvertFrom-Json
@@ -40,11 +51,15 @@ try {
 }
 catch {
     Write-Error "Failed to load configuration from '$ConfigPath': $_"
+    # The console closes on exit, so this window is the only thing left on screen
+    Show-SetupResult -Status Failed -Title "Setup didn't start" -Subtitle 'Nothing was changed on this PC' `
+        -Items @("Could not load the configuration file $ConfigPath", "$_")
     exit 1
 }
 
 # Initialize logging using path from config
-Initialize-Logging -logPath $script:config.logging.logPath
+# The module keeps its own $script:LogFile; capture the path here so main.ps1 can show it
+$script:LogFile = Initialize-Logging -logPath $script:config.logging.logPath
 $script:Version = (Get-Content "$PSScriptRoot\version.txt" -Raw -ErrorAction SilentlyContinue) -replace '\s'
 Write-Log "=== PSScript Setup Starting (v$script:Version) ===" -Level Success
 Write-Log "Deployment Type: $DeploymentType"
@@ -67,6 +82,8 @@ try {
 }
 catch {
     Write-Log "Pre-flight checks failed: $_" -Level Error
+    Show-SetupResult -Status Failed -Title "Setup didn't start" -Subtitle 'Nothing was changed on this PC' `
+        -Items @("$_") -LogFile $script:LogFile
     exit 1
 }
 
@@ -74,6 +91,8 @@ catch {
 $deploymentConfig = $script:config.deployment[$DeploymentType]
 if (-not $deploymentConfig) {
     Write-Log "Invalid deployment type: $DeploymentType" -Level Error
+    Show-SetupResult -Status Failed -Title "Setup didn't start" -Subtitle 'Nothing was changed on this PC' `
+        -Items @("Profile '$DeploymentType' is not defined in config.json.") -LogFile $script:LogFile
     exit 1
 }
 
@@ -147,7 +166,7 @@ Function Install-PackageManager {
 
 $script:PackageDisplayNames = @{
     'googlechrome'       = 'Google Chrome'
-    'nvidia-app'         = 'NVIDIA'
+    'nvidia-app'         = 'NVIDIA App'
     'vlc'                = 'VLC media player'
     'firefox'            = 'Mozilla Firefox'
     '7zip'               = '7-Zip'
@@ -164,12 +183,38 @@ Function Test-PackageInstalledInRegistry {
         'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
         'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*'
     )
+    # Prefix match: a substring match lets unrelated entries count as installed
+    # (e.g. 'NVIDIA PhysX' satisfying 'NVIDIA App')
     $found = Get-ItemProperty $regPaths -ErrorAction SilentlyContinue |
-        Where-Object { $_.DisplayName -like "*$displayName*" } |
+        Where-Object { $_.DisplayName -like "$displayName*" } |
         Select-Object -First 1
     if ($found) {
         Write-Log "  $PackageName found in system as '$($found.DisplayName) $($found.DisplayVersion)'" -Level Info
         return $true
+    }
+    return $false
+}
+
+Function Wait-MsiIdle {
+    <#
+    .SYNOPSIS
+        Wait until no Windows Installer transaction holds the global _MSIExecute mutex
+    #>
+    param([int]$TimeoutSeconds = 120)
+    $deadline = [datetime]::UtcNow.AddSeconds($TimeoutSeconds)
+    while ([datetime]::UtcNow -lt $deadline) {
+        try {
+            $mutex = [System.Threading.Mutex]::OpenExisting('Global\_MSIExecute')
+            $mutex.Dispose()
+            Start-Sleep -Seconds 2
+        }
+        catch [System.Threading.WaitHandleCannotBeOpenedException] {
+            return $true
+        }
+        catch {
+            # Mutex exists but can't be opened (e.g. access denied) - still busy
+            Start-Sleep -Seconds 2
+        }
     }
     return $false
 }
@@ -196,11 +241,11 @@ Function Install-Packages {
     
     try {
         if ($Manager -eq 'chocolatey') {
-            choco feature enable -n allowGlobalConfirmation
+            $null = Invoke-NativeCommand choco @('feature', 'enable', '-n', 'allowGlobalConfirmation')
 
             foreach ($package in $PackageList) {
                 # Pre-check: already tracked by choco
-                $preCheck = & choco list --local-only --exact $package --limit-output 2>&1
+                $preCheck = Invoke-NativeCommand choco @('list', '--local-only', '--exact', $package, '--limit-output')
                 if ($preCheck -match "(?m)^$([regex]::Escape($package))\|") {
                     Write-Log "  Already installed: $package" -Level Info
                     continue
@@ -226,6 +271,9 @@ Function Install-Packages {
                     $tmpOut = [System.IO.Path]::GetTempFileName()
                     $proc = Start-Process -FilePath "choco" -ArgumentList $chocoArgs `
                         -RedirectStandardOutput $tmpOut -NoNewWindow -PassThru
+                    # Touch the handle now: without it, Start-Process -PassThru often reports
+                    # ExitCode as $null once the process has exited
+                    $null = $proc.Handle
                     $fs = [System.IO.FileStream]::new(
                         $tmpOut,
                         [System.IO.FileMode]::Open,
@@ -280,10 +328,15 @@ Function Install-Packages {
                             }
                             if ($proc.WaitForExit(500)) { break }
                             if ($null -ne $installDeadline -and [datetime]::UtcNow -gt $installDeadline) {
-                                Write-Log "    $package installer running for 5 min - terminating" -Level Warning
-                                $null = & taskkill /T /F /PID $proc.Id 2>&1
-                                Write-Log "    taskkill exit: $LASTEXITCODE" -Level Warning
+                                Write-Log "    $package installer running for 5 min - terminating" -Level Info
+                                $null = Invoke-NativeCommand taskkill @('/T', '/F', '/PID', $proc.Id)
+                                Write-Log "    taskkill exit: $LASTEXITCODE" -Level Info
                                 $killedEarly = $true
+                                # msiexec runs outside choco's process tree; wait for it to release
+                                # the installer mutex so the next attempt/package doesn't fail with 1618
+                                if (-not (Wait-MsiIdle -TimeoutSeconds 120)) {
+                                    Write-Log "    Windows Installer still busy after 2 min" -Level Warning
+                                }
                                 break
                             }
                         }
@@ -293,10 +346,11 @@ Function Install-Packages {
                         $fs.Dispose()
                         Remove-Item $tmpOut -Force -ErrorAction SilentlyContinue
                     }
-                    $chocoExit = if ($killedEarly) { 0 } else { $proc.ExitCode }
+                    # A killed installer has no meaningful exit code; only choco tracking can confirm it
+                    $chocoExit = if ($killedEarly) { $null } else { $proc.ExitCode }
 
                     # Verify via choco tracking (--limit-output gives clean name|version format)
-                    $localPackage = & choco list --local-only --exact $package --limit-output 2>&1
+                    $localPackage = Invoke-NativeCommand choco @('list', '--local-only', '--exact', $package, '--limit-output')
                     if ($localPackage -match "(?m)^$([regex]::Escape($package))\|") {
                         $installed = $true
                         Write-Log "    Installed: $package" -Level Success
@@ -305,33 +359,33 @@ Function Install-Packages {
 
                     # Exit 0/1641/3010 = success or reboot-pending; choco may have skipped an
                     # externally-installed package without adding it to its tracking DB
-                    if ($chocoExit -in @(0, 1641, 3010)) {
+                    if ($null -ne $chocoExit -and $chocoExit -in @(0, 1641, 3010)) {
                         $installed = $true
                         Write-Log "    Installed: $package" -Level Success
                         break
                     }
 
-                    Write-Log "    Package install not confirmed for '$package'" -Level Warning
+                    Write-Log "    Package install not confirmed for '$package'" -Level Info
                     if ($attempt -lt $maxAttempts) { Start-Sleep -Seconds 3 }
                 }
 
                 if (-not $installed -and $package -eq 'googlechrome') {
-                    Write-Log "  Falling back to winget for Google Chrome..." -Level Warning
+                    Write-Log "  Falling back to winget for Google Chrome..." -Level Info
                     if (Get-Command winget -ErrorAction SilentlyContinue) {
                         Write-Log "    Resetting winget sources..." -Level Info
-                        $null = & winget source reset --force 2>&1
-                        $null = & winget source update --disable-interactivity 2>&1
-                        & winget install --id Google.Chrome --silent --accept-package-agreements --accept-source-agreements --source winget
+                        $null = Invoke-NativeCommand winget @('source', 'reset', '--force')
+                        $null = Invoke-NativeCommand winget @('source', 'update', '--disable-interactivity')
+                        Invoke-NativeCommand winget @('install', '--id', 'Google.Chrome', '--silent', '--accept-package-agreements', '--accept-source-agreements', '--source', 'winget') | Write-Host
                         if ($LASTEXITCODE -eq 0) {
                             $installed = $true
                             Write-Log "    Installed googlechrome via winget fallback" -Level Success
                         }
                         else {
-                            Write-Log "    Winget fallback failed for googlechrome (exit code $LASTEXITCODE)" -Level Warning
+                            Write-Log "    Winget fallback failed for googlechrome (exit code $LASTEXITCODE)" -Level Info
                         }
                     }
                     else {
-                        Write-Log "    Winget not available for googlechrome fallback" -Level Warning
+                        Write-Log "    Winget not available for googlechrome fallback" -Level Info
                     }
                 }
 
@@ -495,12 +549,23 @@ Function Uninstall-Microsoft365 {
     Write-Log "Uninstalling Microsoft 365..."
 
     $clickToRunKey = 'HKLM:\SOFTWARE\Microsoft\Office\ClickToRun\Configuration'
+    $regPaths = @(
+        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
+        'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*'
+    )
 
-    # Helper: check if Office is still present
+    function Get-OfficeUninstallEntries {
+        Get-ItemProperty $regPaths -ErrorAction SilentlyContinue |
+            Where-Object { $_.DisplayName -match '^(Microsoft 365|Microsoft Office)' -and -not $_.SystemComponent }
+    }
+
+    # Covers Click-to-Run (ProductReleaseIds) and MSI-based Office (uninstall entries)
     function Test-OfficeStillInstalled {
-        if (-not (Test-Path $clickToRunKey)) { return $false }
-        $ids = (Get-ItemProperty -Path $clickToRunKey -Name ProductReleaseIds -ErrorAction SilentlyContinue).ProductReleaseIds
-        return (-not [string]::IsNullOrWhiteSpace($ids))
+        if (Test-Path $clickToRunKey) {
+            $ids = (Get-ItemProperty -Path $clickToRunKey -Name ProductReleaseIds -ErrorAction SilentlyContinue).ProductReleaseIds
+            if (-not [string]::IsNullOrWhiteSpace($ids)) { return $true }
+        }
+        return [bool](Get-OfficeUninstallEntries)
     }
 
     if (-not (Test-OfficeStillInstalled)) {
@@ -508,29 +573,50 @@ Function Uninstall-Microsoft365 {
         return
     }
 
-    # Pass 1: winget (fast, handles modern Click-to-Run and locale variants)
+    # Pass 1: Office Deployment Tool - silent by design (Display Level=None), removes
+    # every Click-to-Run product/language and MSI Office in one go
+    $odtPath = Join-Path $PSScriptRoot "OfficeSetup.exe"
+    $odtXml  = Join-Path $PSScriptRoot "office.xml"
+    if ((Test-Path $odtPath -PathType Leaf) -and (Test-Path $odtXml -PathType Leaf)) {
+        Write-Log "Attempting Office removal via Office Deployment Tool..." -Level Info
+        try {
+            $odt = Start-Process -FilePath $odtPath -ArgumentList @('/configure', "`"$odtXml`"") -NoNewWindow -PassThru
+            $null = $odt.Handle
+            if ($odt.WaitForExit(20 * 60 * 1000)) {
+                Write-Log "  Office Deployment Tool exit code: $($odt.ExitCode)"
+            } else {
+                Write-Log "  Office Deployment Tool still running after 20 min - continuing" -Level Info
+            }
+        }
+        catch {
+            Write-Log "  Office Deployment Tool failed: $_" -Level Info
+        }
+    } else {
+        Write-Log "  OfficeSetup.exe or office.xml missing - skipping ODT removal" -Level Info
+    }
+
+    if (-not (Test-OfficeStillInstalled)) {
+        Write-Log "Microsoft 365 removed successfully" -Level Success
+        return
+    }
+
+    # Pass 2: winget (handles locale variants by display name)
     if (Get-Command winget -ErrorAction SilentlyContinue) {
         Write-Log "Attempting Office removal via winget..." -Level Info
-        $null = & winget source update --disable-interactivity 2>&1
+        $null = Invoke-NativeCommand winget @('source', 'update', '--disable-interactivity')
 
         $officeNames = @('Microsoft 365', 'Microsoft Office 365', 'Microsoft Office')
 
-        try {
-            $wingetListOutput = & winget list --name "Microsoft 365 - " --accept-source-agreements --source winget 2>&1
-            $detectedNames = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::OrdinalIgnoreCase)
-            foreach ($line in $wingetListOutput) {
-                if ($line -match '^\s*(Microsoft 365\s*-\s*[A-Za-z]{2,3}-[A-Za-z]{2,3})\s{2,}') {
-                    $null = $detectedNames.Add($Matches[1].Trim())
-                }
+        $wingetListOutput = Invoke-NativeCommand winget @('list', '--name', 'Microsoft 365 - ', '--accept-source-agreements', '--source', 'winget')
+        foreach ($line in $wingetListOutput) {
+            if ($line -match '^\s*(Microsoft 365\s*-\s*[A-Za-z]{2,3}-[A-Za-z]{2,3})\s{2,}') {
+                $variant = $Matches[1].Trim()
+                if ($variant -notin $officeNames) { $officeNames += $variant }
             }
-            foreach ($n in $detectedNames) { if ($n -notin $officeNames) { $officeNames += $n } }
-        }
-        catch {
-            Write-Log "Could not enumerate Microsoft 365 language variants: $_" -Level Warning
         }
 
         foreach ($officeName in $officeNames) {
-            $null = & winget uninstall --name $officeName --silent --disable-interactivity --accept-source-agreements --all-versions 2>&1
+            $null = Invoke-NativeCommand winget @('uninstall', '--name', $officeName, '--silent', '--disable-interactivity', '--accept-source-agreements', '--all-versions')
             if ($LASTEXITCODE -eq 0) {
                 Write-Log "  Removed '$officeName' via winget" -Level Success
             }
@@ -542,30 +628,30 @@ Function Uninstall-Microsoft365 {
         return
     }
 
-    # Pass 2: registry uninstall string
-    if (Test-OfficeStillInstalled) {
-        Write-Log "Attempting registry-based Office uninstall..." -Level Warning
-        $regPaths = @(
-            'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
-            'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*'
-        )
-        $officeEntries = Get-ItemProperty $regPaths -ErrorAction SilentlyContinue |
-            Where-Object { $_.DisplayName -like '*Microsoft 365*' -or $_.DisplayName -like '*Microsoft Office*' }
-        foreach ($entry in $officeEntries) {
-            $uninst = if ($entry.QuietUninstallString) { $entry.QuietUninstallString } else { $entry.UninstallString }
-            if ($uninst) {
-                Write-Log "  Running uninstaller for '$($entry.DisplayName)'"
-                try {
-                    if ($uninst -match '(?i)msiexec') {
-                        $guid = [regex]::Match($uninst, '\{[^}]+\}').Value
-                        $null = & msiexec.exe /x $guid /quiet /norestart 2>&1
-                    } else {
-                        $null = & cmd /c "$uninst" 2>&1
-                    }
-                } catch {
-                    Write-Log "  Uninstaller failed for '$($entry.DisplayName)': $_" -Level Warning
-                }
+    # Pass 3: registry uninstall strings - only ever run silently. A bare Click-to-Run
+    # UninstallString opens Office's interactive wizard and would block the unattended run.
+    Write-Log "Attempting registry-based Office uninstall..." -Level Info
+    foreach ($entry in Get-OfficeUninstallEntries) {
+        $uninst = if ($entry.QuietUninstallString) { $entry.QuietUninstallString } else { $entry.UninstallString }
+        if (-not $uninst) { continue }
+        try {
+            if ($uninst -match '(?i)msiexec') {
+                $guid = [regex]::Match($uninst, '\{[^}]+\}').Value
+                if (-not $guid) { continue }
+                Write-Log "  Running msiexec /x for '$($entry.DisplayName)'"
+                $null = Invoke-NativeCommand msiexec.exe @('/x', $guid, '/quiet', '/norestart')
             }
+            elseif ($uninst -match '(?i)OfficeClickToRun\.exe') {
+                Write-Log "  Running silent Click-to-Run removal for '$($entry.DisplayName)'"
+                $silent = if ($uninst -match '(?i)DisplayLevel=') { $uninst } else { "$uninst DisplayLevel=False" }
+                $null = Invoke-NativeCommand cmd.exe @('/c', $silent)
+            }
+            else {
+                Write-Log "  No silent uninstall available for '$($entry.DisplayName)' - skipped" -Level Info
+            }
+        }
+        catch {
+            Write-Log "  Uninstaller failed for '$($entry.DisplayName)': $_" -Level Info
         }
     }
 
@@ -573,6 +659,69 @@ Function Uninstall-Microsoft365 {
         Write-Log "Microsoft 365 may still be partially installed - manual removal may be needed" -Level Warning
     } else {
         Write-Log "Microsoft 365 removed successfully" -Level Success
+    }
+}
+
+Function Install-WindowsUpdateDrivers {
+    <#
+    .SYNOPSIS
+        Install all pending driver updates from Windows Update (GPU, chipset, etc.)
+    .DESCRIPTION
+        Uses the built-in Windows Update Agent COM API - no extra modules. Microsoft-signed
+        WHQL drivers; covers AMD, for which no winget/Chocolatey package exists.
+    #>
+    Write-Log "Searching Windows Update for driver updates..."
+    try {
+        $session  = New-Object -ComObject Microsoft.Update.Session
+        $searcher = $session.CreateUpdateSearcher()
+        $found    = $searcher.Search("IsInstalled=0 and Type='Driver' and IsHidden=0").Updates
+
+        $toInstall = New-Object -ComObject Microsoft.Update.UpdateColl
+        foreach ($update in $found) {
+            # Anything that may prompt would block the unattended run
+            if ($update.InstallationBehavior.CanRequestUserInput) {
+                Write-Log "  Skipping (needs user input): $($update.Title)"
+                continue
+            }
+            if (-not $update.EulaAccepted) { $update.AcceptEula() }
+            Write-Log "  Found: $($update.Title)"
+            $null = $toInstall.Add($update)
+        }
+
+        if ($toInstall.Count -eq 0) {
+            Write-Log "No driver updates available" -Level Success
+            return
+        }
+
+        Write-Log "Downloading $($toInstall.Count) driver update(s)..."
+        $downloader = $session.CreateUpdateDownloader()
+        $downloader.Updates = $toInstall
+        $null = $downloader.Download()
+
+        Write-Log "Installing $($toInstall.Count) driver update(s)..."
+        $installer = $session.CreateUpdateInstaller()
+        $installer.Updates = $toInstall
+        $result = $installer.Install()
+
+        # OperationResultCode: 2 = Succeeded, 3 = SucceededWithErrors, 4 = Failed, 5 = Aborted
+        $failed = 0
+        for ($i = 0; $i -lt $toInstall.Count; $i++) {
+            $code = $result.GetUpdateResult($i).ResultCode
+            if ($code -eq 2) {
+                Write-Log "  Installed: $($toInstall.Item($i).Title)" -Level Success
+            } else {
+                $failed++
+                Write-Log "  Driver update failed (result $code): $($toInstall.Item($i).Title)" -Level Warning
+            }
+        }
+        if ($result.RebootRequired) {
+            $script:RebootRequired = $true
+            Write-Log "Driver updates need a reboot to finish"
+        }
+        Write-Log "Driver updates done: $($toInstall.Count - $failed) installed, $failed failed"
+    }
+    catch {
+        Write-Log "Windows Update driver install failed: $_" -Level Warning
     }
 }
 
@@ -595,18 +744,9 @@ try {
         Install-Packages -PackageList @('nvidia-app') -Manager chocolatey
     }
     elseif ($gpuInfo.IsAmd) {
-        Write-Log "Step 3a: Installing AMD drivers (30%)"
-        try {
-            winget install --id AMD.AdrenalinEdition --silent --accept-package-agreements --accept-source-agreements --source winget
-            if ($LASTEXITCODE -ne 0) {
-                Write-Log "AMD Radeon Software install returned exit code $LASTEXITCODE" -Level Warning
-            } else {
-                Write-Log "AMD Radeon Software installed" -Level Success
-            }
-        }
-        catch {
-            Write-Log "AMD Radeon Software installation failed: $_" -Level Warning
-        }
+        # No unattended AMD Adrenalin package exists in winget, Chocolatey or the Store
+        # (AMD.AdrenalinEdition / amd-radeon-software do not exist) - Step 3b covers it.
+        Write-Log "Step 3a: AMD GPU detected ($($gpuInfo.Name)) - driver comes from Windows Update (Step 3b)"
     }
     elseif ($gpuInfo.IsIntel) {
         Write-Log "Step 3a: Installing Intel Graphics drivers (30%)"
@@ -624,6 +764,10 @@ try {
             Write-Log "Intel Graphics driver installation failed: $_" -Level Warning
         }
     }
+
+    # Step 3b: All pending drivers from Windows Update (GPU incl. AMD, chipset, etc.)
+    Write-Log "Step 3b: Installing driver updates from Windows Update (35%)"
+    Install-WindowsUpdateDrivers
     
     # Step 4: Apply registry settings
     Write-Log "Step 4: Applying registry settings (40%)"
@@ -690,9 +834,19 @@ try {
             $signedUrl = Invoke-RestMethod -Uri "https://www.898.tv/api/CustomDesign" -Method Post `
                 -ContentType "application/json; charset=utf-8" -Body $apiBody `
                 -UseBasicParsing -TimeoutSec 30 -ErrorAction Stop
+            if (-not ($signedUrl -is [string] -and $signedUrl -like 'https://*')) {
+                throw "Unexpected response from 898.tv API (API may have changed): $signedUrl"
+            }
             $helpdeskDest = "$installFolder\Netixx Helpdesk.exe"
             $wc = New-Object System.Net.WebClient
             $wc.DownloadFile($signedUrl, $helpdeskDest)
+            # The URL comes from an undocumented API - only publish the exe if it is
+            # genuinely TeamViewer-signed
+            $sig = Get-AuthenticodeSignature $helpdeskDest
+            if ($sig.Status -ne 'Valid' -or $sig.SignerCertificate.Subject -notmatch '^CN=TeamViewer ') {
+                Remove-Item $helpdeskDest -Force -ErrorAction SilentlyContinue
+                throw "Downloaded file failed signature check (status: $($sig.Status), signer: $($sig.SignerCertificate.Subject)) - deleted"
+            }
             New-Item -Path "$env:PUBLIC\Desktop\Netixx Helpdesk" -ItemType SymbolicLink -Value $helpdeskDest -Force -ErrorAction Continue
             Write-Log "Installed HelpDesk application" -Level Success
         } catch {
@@ -738,11 +892,17 @@ try {
             if (-not $loggedInUser) {
                 Write-Log "  No interactive user detected - skipping file associations" -Level Warning
             } else {
+                # The script folder lives in the elevated account's %TEMP%, which the
+                # logged-in user may not be able to read - run from C:\Install instead
+                $ftaExe  = Join-Path $installFolder 'SetUserFTA.exe'
+                $ftaList = Join-Path $installFolder 'assoc.txt'
+                Copy-Item "$PSScriptRoot\SetUserFTA.exe" $ftaExe -Force
+                Copy-Item "$PSScriptRoot\assoc.txt" $ftaList -Force
+
                 Write-Log "  Running SetUserFTA as $loggedInUser via scheduled task..."
                 $taskName  = "GKScript-SetFileAssoc"
-                $action    = New-ScheduledTaskAction -Execute "$PSScriptRoot\SetUserFTA.exe" `
-                                 -Argument "`"$PSScriptRoot\assoc.txt`""
-                $settings  = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes 2)
+                $action    = New-ScheduledTaskAction -Execute $ftaExe -Argument "`"$ftaList`""
+                $settings  = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes 2) -Priority 4
                 $principal = New-ScheduledTaskPrincipal -UserId $loggedInUser `
                                  -LogonType Interactive -RunLevel Limited
 
@@ -750,17 +910,26 @@ try {
                     -Settings $settings -Principal $principal -Force | Out-Null
                 Start-ScheduledTask -TaskName $taskName
 
-                $deadline = [datetime]::UtcNow.AddSeconds(30)
-                while ((Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue).State -ne 'Ready') {
-                    if ([datetime]::UtcNow -gt $deadline) {
-                        Write-Log "  File association task timed out" -Level Warning
-                        break
-                    }
+                # LastTaskResult 0x41303 = has not run yet, 0x41301 = still running. Checking
+                # State alone races: it can still read 'Ready' before the task has started.
+                $pending  = @(0x41303, 0x41301)
+                $deadline = [datetime]::UtcNow.AddSeconds(60)
+                do {
                     Start-Sleep -Milliseconds 500
-                }
+                    $taskInfo = Get-ScheduledTaskInfo -TaskName $taskName -ErrorAction SilentlyContinue
+                    $state    = (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue).State
+                    $done     = $taskInfo -and $state -eq 'Ready' -and $taskInfo.LastTaskResult -notin $pending
+                } until ($done -or [datetime]::UtcNow -gt $deadline)
 
                 Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
-                Write-Log "  File associations set" -Level Success
+
+                if (-not $done) {
+                    Write-Log "File associations: SetUserFTA did not finish within 60 s" -Level Warning
+                } elseif ($taskInfo.LastTaskResult -ne 0) {
+                    Write-Log ("File associations: SetUserFTA failed (exit code 0x{0:X})" -f $taskInfo.LastTaskResult) -Level Warning
+                } else {
+                    Write-Log "  File associations set" -Level Success
+                }
             }
         }
         catch {
@@ -768,11 +937,6 @@ try {
         }
     }
     
-    Write-Log "=== Setup Completed Successfully ===" -Level Success
-    Write-Log "Log file: $($script:LogFile)"
-
-    [System.Windows.Forms.MessageBox]::Show("Setup completed successfully!`nLog file: $($script:LogFile)", "Setup Complete", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information) | Out-Null
-
     # Final: Stop Explorer, write icon layout to registry, then restart Explorer.
     # The registry write MUST happen while Explorer is dead - otherwise Explorer
     # overwrites IconLayouts with the current layout on shutdown.
@@ -812,7 +976,7 @@ try {
         if ($shellUser) {
             $explorerAction    = New-ScheduledTaskAction -Execute 'C:\Windows\explorer.exe'
             $explorerPrincipal = New-ScheduledTaskPrincipal -UserId $shellUser -LogonType Interactive -RunLevel Limited
-            $explorerSettings  = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes 1)
+            $explorerSettings  = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes 1) -Priority 4
             Register-ScheduledTask -TaskName 'GKScript-StartExplorer' -Action $explorerAction `
                 -Settings $explorerSettings -Principal $explorerPrincipal -Force | Out-Null
             Start-ScheduledTask -TaskName 'GKScript-StartExplorer'
@@ -825,17 +989,37 @@ try {
     catch {
         Write-Log "Explorer restart failed: $_" -Level Warning
     }
+
+    # Shown last: the technician has usually walked away, and a window before the
+    # Explorer step would hold back the desktop layout until someone clicks
+    $issues = Get-LogIssues
+    if ($issues.Count -eq 0) {
+        Write-Log "=== Setup Completed Successfully ===" -Level Success
+        Write-Log "Log file: $($script:LogFile)"
+        Show-SetupResult -Status Success -Title 'Setup complete' -Subtitle (Get-RunSummary) `
+            -LogFile $script:LogFile -RebootRequired:([bool]$script:RebootRequired)
+    } else {
+        $count = if ($issues.Count -eq 1) { '1 warning' } else { "$($issues.Count) warnings" }
+        Write-Log "=== Setup Finished With $count ===" -Level Success
+        Write-Log "Log file: $($script:LogFile)"
+        Show-SetupResult -Status Warning -Title "Finished with $count" -Subtitle (Get-RunSummary) `
+            -Items $issues -LogFile $script:LogFile -RebootRequired:([bool]$script:RebootRequired)
+    }
 }
 catch {
+    # Collect earlier warnings before the failure lines below join the list
+    $earlier = Get-LogIssues
     Write-Log "=== Setup Failed ===" -Level Error
     Write-Log "Error: $_" -Level Error
     Write-Log "Stack trace: $($_.ScriptStackTrace)" -Level Error
     Write-Log "Log file: $($script:LogFile)"
-    
-    [System.Windows.Forms.MessageBox]::Show("Setup failed!`nCheck: $($script:LogFile)`n`nError: $_", "Setup Error", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null
-    
+
+    Show-SetupResult -Status Failed -Title 'Setup failed' -Subtitle "$(Get-RunSummary) - stopped before finishing" `
+        -Items (@("$_") + $earlier) -LogFile $script:LogFile
+
     exit 1
 }
 finally {
+    Set-KeepAwake
     Write-Log "Setup script ended at $(Get-Date)"
 }

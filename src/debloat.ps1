@@ -1,4 +1,8 @@
 #https://github.com/Raphire/Win11Debloat
+
+# main.ps1 runs with 'Stop'; here one non-removable app must not abort the rest
+$ErrorActionPreference = 'Continue'
+
 Write-Progress -Activity "Uninstalling Adware" -Status "90% Complete:" -PercentComplete 85
 
 function Remove-UWPApp {
@@ -14,8 +18,13 @@ function Remove-UWPApp {
         }
 
         Write-Output "Removing $AppxPackage from all users..."
-        Get-AppxPackage -AllUsers -Name "$AppxPackage" | Remove-AppxPackage -AllUsers
-        Get-AppxProvisionedPackage -Online | Where-Object DisplayName -like "$AppxPackage" | Remove-AppxProvisionedPackage -Online -AllUsers
+        try {
+            Get-AppxPackage -AllUsers -Name "$AppxPackage" | Remove-AppxPackage -AllUsers -ErrorAction Stop
+            Get-AppxProvisionedPackage -Online | Where-Object DisplayName -like "$AppxPackage" | Remove-AppxProvisionedPackage -Online -AllUsers -ErrorAction Stop
+        }
+        catch {
+            Write-Output "Could not remove ${AppxPackage}: $($_.Exception.Message)"
+        }
     }
 }
 
@@ -39,7 +48,7 @@ function Remove-ChromeWebApps {
     taskkill /f /im chrome.exe
     & "$PSScriptRoot\AutoHotkey32.exe" "$PSScriptRoot\chrome.ahk"
     winget uninstall "tabellen"
-    winget uninstall "präsentationen"
+    winget uninstall "pr$([char]0xE4)sentationen"
     winget uninstall "youtube"
     winget uninstall "google drive"
     winget uninstall "gmail"
@@ -69,6 +78,11 @@ $excluded = [System.Collections.Generic.HashSet[string]]::new([System.StringComp
     'Microsoft.MicrosoftStickyNotes'
     'MicrosoftCorporationII.QuickAssist'
     'Clipchamp.Clipchamp'
+    # Marked "unsafe" upstream: breaks troubleshooters, Store/Photos UI, Xbox sign-in
+    'Microsoft.GetHelp'
+    'Microsoft.Xbox.TCUI'
+    'Microsoft.XboxIdentityProvider'
+    'Microsoft.XboxSpeechToTextOverlay'
 ) | ForEach-Object { $null = $excluded.Add($_) }
 
 # OEM bloat and older/alternate package IDs not covered by Win11Debloat
@@ -125,6 +139,8 @@ try {
     foreach ($app in $data.Apps) {
         $id = $app.AppId.Trim()
         if ($excluded.Contains($id)) { continue }
+        # Never auto-remove what upstream flags unsafe, including entries added after this review
+        if ($app.Recommendation -eq 'unsafe') { continue }
         if ($id -match '\s') { continue }
         if ($id -notmatch '\.' -and $id -notmatch '\*') { $id = "*$id*" }
         $null = $fetched.Add($id)
@@ -314,6 +330,8 @@ if (-not $appxToRemove) {
     )
 }
 
+# Applies to the built-in fallback too, so the exclusions hold either way
+$appxToRemove = @($appxToRemove | Where-Object { -not $excluded.Contains($_) })
 Remove-UWPApp -AppxPackages $appxToRemove
 uninstallfun
 Import-TelemetryRegistry

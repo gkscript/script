@@ -1,5 +1,21 @@
 # Logging and utility functions for main setup script
 
+# Windows PowerShell 5.1 does not load WinForms by default; every MessageBox in
+# main.ps1 and this module throws "type not found" without it.
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
+. (Join-Path $PSScriptRoot 'WindowTheme.ps1')
+
+$script:LogIssues = [System.Collections.Generic.List[string]]::new()
+
+Function Get-LogIssues {
+    <#
+    .SYNOPSIS
+        Return every Warning/Error message logged so far, in order
+    #>
+    return , $script:LogIssues.ToArray()
+}
+
 Function Initialize-Logging {
     <#
     .SYNOPSIS
@@ -19,6 +35,7 @@ Function Initialize-Logging {
     $script:LogFile = Join-Path $logPath "setup_$(Get-Date -Format 'yyyyMMdd_HHmmss').log"
     
     Write-Log "Logging initialized at $($script:LogFile)"
+    return $script:LogFile
 }
 
 Function Write-Log {
@@ -36,6 +53,11 @@ Function Write-Log {
     
     $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
     $logMessage = "[$timestamp] [$Level] $Message"
+
+    # Collected for the end-of-run summary (Get-LogIssues)
+    if ($Level -in 'Warning', 'Error') {
+        $script:LogIssues.Add($Message.Trim())
+    }
     
     # Write to file
     if ($script:LogFile) {
@@ -61,9 +83,8 @@ Function Test-PrerequisiteAdmin {
     $isAdmin = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
     
     if (-not $isAdmin) {
-        Write-Log "This script requires administrator privileges" -Level Error
-        $null = [System.Windows.Forms.MessageBox]::Show("This script requires administrator privileges. Please run as administrator.", "Administrator Required", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
-        exit 1
+        # main.ps1's pre-flight catch logs this and shows the result window
+        throw "Administrator rights are required. Start gk-script.exe again and accept the UAC prompt."
     }
     
     Write-Log "Administrator privileges confirmed" -Level Success
@@ -84,9 +105,8 @@ Function Test-PrerequisiteInternet {
         Write-Log "Internet connectivity confirmed" -Level Success
     }
     catch {
-        Write-Log "Internet connectivity check failed: $_" -Level Error
-        $null = [System.Windows.Forms.MessageBox]::Show("Please check your Internet connection!", "No Internet", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
-        exit 1
+        # main.ps1's pre-flight catch logs this and shows the result window
+        throw "No internet connection. Connect the PC to the network and run setup again."
     }
 }
 
@@ -238,6 +258,171 @@ Function Stop-ProcessWithTimeout {
     } until (-not (Get-Process $Name -ErrorAction SilentlyContinue) -or [datetime]::UtcNow -gt $deadline)
 }
 
+Function Set-KeepAwake {
+    <#
+    .SYNOPSIS
+        Keep the PC and display awake during an unattended run (-Enable), or release it
+    .DESCRIPTION
+        Without this, a 15-40 min run ends with the monitor off or the PC asleep (and
+        installs paused) - the result window would greet nobody.
+    #>
+    param([switch]$Enable)
+
+    if (-not ('GkScript.Power' -as [type])) {
+        Add-Type -Namespace GkScript -Name Power -MemberDefinition @'
+[System.Runtime.InteropServices.DllImport("kernel32.dll")]
+public static extern uint SetThreadExecutionState(uint flags);
+'@
+    }
+    # ES_CONTINUOUS (0x80000000) | ES_SYSTEM_REQUIRED (0x1) | ES_DISPLAY_REQUIRED (0x2)
+    $flags = if ($Enable) { [uint32]2147483651 } else { [uint32]2147483648 }
+    $null = [GkScript.Power]::SetThreadExecutionState($flags)
+}
+
+Function Show-SetupResult {
+    <#
+    .SYNOPSIS
+        Show the end-of-run result window (src/lib/SetupResult.xaml)
+    .DESCRIPTION
+        Built to be read from across the room: the status color fills the top of the
+        window. Falls back to a MessageBox if the window cannot be created, since this
+        is the only result signal a technician who walked away will see.
+    .PARAMETER Items
+        Warnings (Status Warning) or error details (Status Failed). Ignored for Success.
+    #>
+    param(
+        [Parameter(Mandatory)]
+        [ValidateSet('Success', 'Warning', 'Failed')]
+        [string]$Status,
+
+        [Parameter(Mandatory)]
+        [string]$Title,
+
+        [string]$Subtitle = '',
+
+        [string[]]$Items = @(),
+
+        [string]$LogFile,
+
+        [switch]$RebootRequired
+    )
+
+    # Per status: band, headline, subline, item glyph color; solid glyphs from Segoe Fluent
+    # Icons so all three carry the same weight at distance; taskbar progress color.
+    # Every text color holds >= 4.5:1 on its band.
+    $themes = @{
+        Success = @{ Band = '#107C10'; Fg = '#FFFFFF'; Sub = '#DFF6DD'; Item = '#107C10'; Glyph = 0xEC61; Heading = '';                Taskbar = 'Normal' }
+        Warning = @{ Band = '#FFC83D'; Fg = '#241B00'; Sub = '#4A3A00'; Item = '#9D5D00'; Glyph = 0xE814; Heading = 'Needs attention'; Taskbar = 'Paused' }
+        Failed  = @{ Band = '#C42B1C'; Fg = '#FFFFFF'; Sub = '#FDE7E9'; Item = '#C42B1C'; Glyph = 0xEB90; Heading = 'What went wrong'; Taskbar = 'Error' }
+    }
+    $theme = $themes[$Status]
+
+    try {
+        [xml]$xaml = Get-ThemedXaml (Get-Content (Join-Path $PSScriptRoot 'SetupResult.xaml') -Raw -Encoding UTF8)
+        $window = [Windows.Markup.XamlReader]::Load((New-Object System.Xml.XmlNodeReader $xaml))
+        $find = { param($name) $window.FindName($name) }
+        $brush = { param($hex) [System.Windows.Media.BrushConverter]::new().ConvertFromString($hex) }
+
+        $window.Title = "Netixx Grundkonfiguration - $Title"
+        $icon = Join-Path (Split-Path $PSScriptRoot -Parent) 'netixx.ico'
+        if (Test-Path $icon) {
+            $window.Icon = [System.Windows.Media.Imaging.BitmapFrame]::Create([uri](Resolve-Path $icon).Path)
+        }
+        # A full green/yellow/red taskbar button: still visible when the window is covered
+        $window.TaskbarItemInfo = New-Object System.Windows.Shell.TaskbarItemInfo -Property @{
+            ProgressState = $theme.Taskbar; ProgressValue = 1.0
+        }
+        # A pending restart is part of the outcome, so it joins the band
+        if ($RebootRequired -and $Status -ne 'Failed') {
+            $Subtitle = (@($Subtitle, 'Restart required') | Where-Object { $_ }) -join " $([char]0xB7) "
+        }
+        (& $find 'Band').Background = & $brush $theme.Band
+        (& $find 'Glyph').Text = [string][char]$theme.Glyph
+        (& $find 'Glyph').Foreground = & $brush $theme.Fg
+        (& $find 'TitleText').Text = $Title
+        (& $find 'TitleText').Foreground = & $brush $theme.Fg
+        (& $find 'SubtitleText').Text = $Subtitle
+        (& $find 'SubtitleText').Foreground = & $brush $theme.Sub
+        if (-not $Subtitle) { (& $find 'SubtitleText').Visibility = 'Collapsed' }
+
+        $heading = & $find 'SectionHeading'
+        $list = & $find 'ItemsList'
+        $nothingListed = $Status -eq 'Success' -or $Items.Count -eq 0
+        if ($nothingListed -and $RebootRequired) {
+            # The restart is the one thing left; say it as the heading, not under "nothing"
+            $heading.Text = 'Restart the PC to finish installing drivers.'
+            (& $find 'ItemsScroll').Visibility = 'Collapsed'
+        } elseif ($nothingListed) {
+            $heading.Text = 'Nothing needs attention.'
+            $heading.FontWeight = [System.Windows.FontWeights]::Normal
+            (& $find 'ItemsScroll').Visibility = 'Collapsed'
+        } else {
+            $heading.Text = $theme.Heading
+            $list.Tag = & $brush $theme.Item
+            $list.ItemsSource = $Items
+        }
+
+        if ($LogFile) {
+            (& $find 'LogPath').Text = $LogFile
+        } else {
+            (& $find 'LogRow').Visibility = 'Collapsed'
+            (& $find 'OpenLogButton').Visibility = 'Collapsed'
+        }
+
+        $restartButton = & $find 'RestartButton'
+        $closeButton = & $find 'CloseButton'
+        if ($RebootRequired) {
+            if (-not $nothingListed) { (& $find 'RestartRow').Visibility = 'Visible' }
+            $restartButton.Visibility = 'Visible'
+        } else {
+            $closeButton.IsDefault = $true
+        }
+
+        (& $find 'OpenLogButton').Add_Click({ Start-Process notepad.exe -ArgumentList "`"$LogFile`"" })
+        $restartButton.Add_Click({ $script:ResultRestart = $true; $window.Close() })
+        $closeButton.Add_Click({ $window.Close() })
+
+        Enable-WindowBackdrop -Window $window
+        # The status color runs up through the title bar to the window's top edge
+        Set-WindowCaptionColor -Window $window -Background $theme.Band -Foreground $theme.Fg
+        $script:ResultRestart = $false
+        $null = $window.ShowDialog()
+
+        # Restart after the window is gone, never from inside its event handler
+        if ($script:ResultRestart) {
+            Write-Log "Restart requested from result window"
+            Restart-Computer -Force
+        }
+    }
+    catch {
+        Write-Log "Result window failed, falling back to MessageBox: $_" -Level Warning
+        $icon = @{ Success = 'Information'; Warning = 'Warning'; Failed = 'Error' }[$Status]
+        $text = (@($Title, $Subtitle) + @($Items) + @($(if ($RebootRequired) { 'Restart the PC to finish installing drivers.' }), $(if ($LogFile) { "Log file: $LogFile" }))) |
+            Where-Object { $_ } | Out-String
+        $null = [System.Windows.Forms.MessageBox]::Show($text.Trim(), 'Netixx Grundkonfiguration', 'OK', $icon)
+    }
+}
+
+Function Invoke-NativeCommand {
+    <#
+    .SYNOPSIS
+        Run a native executable and return its merged stdout/stderr as strings
+    .DESCRIPTION
+        Under $ErrorActionPreference = 'Stop', stderr captured with 2>&1 becomes a
+        terminating error. This runs the command with a local 'Continue' preference
+        so stderr output never aborts the caller. $LASTEXITCODE is preserved.
+    #>
+    param(
+        [Parameter(Mandatory)]
+        [string]$FilePath,
+
+        [string[]]$ArgumentList = @()
+    )
+
+    $ErrorActionPreference = 'Continue'
+    & $FilePath @ArgumentList 2>&1 | ForEach-Object { "$_" }
+}
+
 Function Invoke-SafeProcess {
     <#
     .SYNOPSIS
@@ -276,6 +461,9 @@ Function Invoke-SafeProcess {
 Export-ModuleMember -Function @(
     'Initialize-Logging'
     'Write-Log'
+    'Get-LogIssues'
+    'Show-SetupResult'
+    'Set-KeepAwake'
     'Test-PrerequisiteAdmin'
     'Test-PrerequisiteInternet'
     'Sync-SystemTimeWithInternet'
@@ -284,5 +472,6 @@ Export-ModuleMember -Function @(
     'Get-SystemGPU'
     'Get-BitlockerStatus'
     'Invoke-SafeProcess'
+    'Invoke-NativeCommand'
     'Stop-ProcessWithTimeout'
 )
