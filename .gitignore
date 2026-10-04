@@ -12,3 +12,6 @@ tools/
 $RECYCLE.BIN/
 Thumbs.db
 desktop.ini
+
+# Impeccable design-review screenshots (local only)
+.impeccable/review/
