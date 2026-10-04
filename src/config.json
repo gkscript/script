@@ -7,25 +7,34 @@
   "deployment": {
     "business": {
       "name": "Business",
-      "packages": ["vlc", "firefox", "googlechrome", "7zip", "adobereader"],
+      "packages": ["vlc", "firefox", "googlechrome", "7zip", "adobereader", "powertoys"],
       "branded": true
     },
     "consumer": {
       "name": "Consumer",
-      "packages": ["vlc", "firefox", "googlechrome", "7zip", "adobereader", "libreoffice", "paint.net"],
+      "packages": ["vlc", "firefox", "googlechrome", "7zip", "adobereader", "libreoffice", "paint.net", "powertoys"],
       "branded": true
     },
     "consumer-nolo": {
       "name": "Consumer (No LibreOffice)",
-      "packages": ["vlc", "firefox", "googlechrome", "7zip", "adobereader", "paint.net"],
+      "packages": ["vlc", "firefox", "googlechrome", "7zip", "adobereader", "paint.net", "powertoys"],
       "branded": true
     }
   },
+  "packageCatalog": {
+    "_comment": "winget first (vendor installers, hash-checked); Chocolatey only if winget fails. {uilang} = Windows display language (de/it/...); IDs are tried in order.",
+    "vlc":          { "winget": ["VideoLAN.VLC"], "choco": "vlc" },
+    "firefox":      { "winget": ["Mozilla.Firefox.{uilang}", "Mozilla.Firefox"], "choco": "firefox" },
+    "googlechrome": { "winget": ["Google.Chrome.EXE"], "wingetArgs": "--scope machine", "choco": "googlechrome" },
+    "7zip":         { "winget": ["7zip.7zip"], "choco": "7zip" },
+    "adobereader":  { "winget": ["Adobe.Acrobat.Reader.64-bit"], "choco": "adobereader", "chocoParams": "/UpdateMode:3 /EnableUpdateService" },
+    "libreoffice":  { "winget": ["TheDocumentFoundation.LibreOffice"], "choco": "libreoffice-still" },
+    "paint.net":    { "winget": ["dotPDN.PaintDotNet"], "choco": "paint.net" },
+    "powertoys":    { "winget": ["Microsoft.PowerToys"], "wingetArgs": "--scope machine", "choco": "powertoys" },
+    "nvidia-app":   { "winget": ["XP8CLZL93F5Z4P"], "wingetSource": "msstore", "choco": "nvidia-app" }
+  },
   "paths": {
-    "installFolder": "C:\\Install",
-    "startMenuPath": "%LOCALAPPDATA%/Packages/Microsoft.Windows.StartMenuExperienceHost_cw5n1h2txyewy/LocalState",
-    "logoPath": "src/oemlogo.bmp",
-    "helpDeskExe": "src/Netixx Helpdesk.exe"
+    "installFolder": "C:\\Install"
   },
   "windows": {
     "deleteUnwantedShortcuts": true,

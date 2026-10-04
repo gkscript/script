@@ -313,6 +313,9 @@ Function Show-SetupResult {
 
         [string[]]$Items = @(),
 
+        # Steps left to the technician that are not problems (shown with an info icon)
+        [string[]]$Notes = @(),
+
         [string]$LogFile,
 
         [switch]$RebootRequired
@@ -389,6 +392,10 @@ Function Show-SetupResult {
         $closeButton.Content = Get-UiText result.button.close
         (& $find 'RestartText').Text = Get-UiText result.restartLine
         (& $find 'LogLabel').Text = Get-UiText result.log
+        if ($Notes.Count -gt 0) {
+            (& $find 'NotesList').ItemsSource = $Notes
+            (& $find 'NotesList').Visibility = 'Visible'
+        }
         [System.Windows.Automation.AutomationProperties]::SetName((& $find 'LogPath'), (Get-UiText result.logPathName))
         if ($RebootRequired) {
             if (-not $nothingListed) { (& $find 'RestartRow').Visibility = 'Visible' }
@@ -440,6 +447,59 @@ Function Invoke-NativeCommand {
 
     $ErrorActionPreference = 'Continue'
     & $FilePath @ArgumentList 2>&1 | ForEach-Object { "$_" }
+}
+
+Function Invoke-SilentUninstall {
+    <#
+    .SYNOPSIS
+        Uninstall a program from its uninstall-registry entry - silently only, with a timeout
+    .DESCRIPTION
+        Uses msiexec /x {GUID} /qn for MSI products, else the vendor's QuietUninstallString.
+        A plain UninstallString is never run: it usually opens a wizard, which would block an
+        unattended run. Returns 'removed', 'reboot', 'manual' (no silent path), 'failed' or
+        'timeout'; the caller decides how loudly to report it.
+    .PARAMETER Entry
+        An uninstall-registry entry (Get-ItemProperty of ...\Uninstall\*)
+    #>
+    param(
+        [Parameter(Mandatory)]$Entry,
+        [int]$TimeoutMinutes = 15
+    )
+
+    $command = $null
+    if ($Entry.UninstallString -match '(?i)msiexec') {
+        $guid = [regex]::Match($Entry.UninstallString, '\{[0-9A-Fa-f\-]+\}').Value
+        if ($guid) { $command = "msiexec.exe /x $guid /qn /norestart" }
+    }
+    elseif ($Entry.QuietUninstallString) {
+        $command = $Entry.QuietUninstallString
+    }
+    if (-not $command) { return 'manual' }
+
+    $proc = Start-Process -FilePath 'cmd.exe' -ArgumentList '/c', $command -WindowStyle Hidden -PassThru
+    $null = $proc.Handle
+    if (-not $proc.WaitForExit($TimeoutMinutes * 60 * 1000)) {
+        $null = Invoke-NativeCommand taskkill @('/T', '/F', '/PID', $proc.Id)
+        return 'timeout'
+    }
+    switch ($proc.ExitCode) {
+        { $_ -in 0, 1605 } { return 'removed' }      # 1605 = already gone
+        { $_ -in 1641, 3010 } { return 'reboot' }
+        default { return 'failed' }
+    }
+}
+
+Function Get-UninstallEntries {
+    <#
+    .SYNOPSIS
+        Visible (non-system-component) uninstall-registry entries, 64- and 32-bit
+    #>
+    $regPaths = @(
+        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
+        'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*'
+    )
+    Get-ItemProperty $regPaths -ErrorAction SilentlyContinue |
+        Where-Object { $_.DisplayName -and -not $_.SystemComponent }
 }
 
 Function Invoke-SafeProcess {
@@ -495,5 +555,7 @@ Export-ModuleMember -Function @(
     'Get-BitlockerStatus'
     'Invoke-SafeProcess'
     'Invoke-NativeCommand'
+    'Invoke-SilentUninstall'
+    'Get-UninstallEntries'
     'Stop-ProcessWithTimeout'
 )

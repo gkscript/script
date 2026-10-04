@@ -18,12 +18,19 @@ function Remove-UWPApp {
         }
 
         Write-Output "Removing $AppxPackage from all users..."
+        # Separate try blocks: if the per-user removal fails, still deprovision the package
+        # so it doesn't come back for accounts created later
         try {
             Get-AppxPackage -AllUsers -Name "$AppxPackage" | Remove-AppxPackage -AllUsers -ErrorAction Stop
+        }
+        catch {
+            Write-Output "Could not remove ${AppxPackage} for existing users: $($_.Exception.Message)"
+        }
+        try {
             Get-AppxProvisionedPackage -Online | Where-Object DisplayName -like "$AppxPackage" | Remove-AppxProvisionedPackage -Online -AllUsers -ErrorAction Stop
         }
         catch {
-            Write-Output "Could not remove ${AppxPackage}: $($_.Exception.Message)"
+            Write-Output "Could not deprovision ${AppxPackage}: $($_.Exception.Message)"
         }
     }
 }
@@ -36,24 +43,38 @@ function Import-TelemetryRegistry {
     }
 }
 
-function uninstallfun {
-    $adware = "HP Connection Optimizer", "Microsoft Family", "Microsoft-Tipps", "Microsoft Solitaire Collection", "Feedback-Hub", "Microsoft Kontakte", "office", "WebAdvisor von McAfee", "Xbox", "HP Documentation", "Power Automate", "Mail und Kalender", "myHP", "Alexa", "HP Quickdrop", "HP Smart", "HP System Event Utility", "Dropbox-Sonderaktion", "skype", "Nachrichten", "Microsoft Whiteboard", "Intel(R) Management and Security Status", "HP Easy Clean", "HP Privacy Settings", "HP PC Hardware Diagnostics Windows", "optane", "officehub", "outlook for windows", "Lenovo Smart Meeting", "{25FB0D7A-ED1B-4663-809E-A54E8A4274B0}_is1"
+# Desktop (Win32) OEM promo and trial software, matched on the uninstall-registry DisplayName -
+# language-independent, unlike the winget name list this replaces. Only silent uninstalls run
+# (Invoke-SilentUninstall: msiexec /qn or QuietUninstallString, with a timeout); the rest is
+# logged. Deliberately not here: HP System Event Utility (Fn keys), HP Smart / myHP / HP PC
+# Hardware Diagnostics, Intel Optane management (kept hardware tools), and "office" (the old
+# winget name also matched Microsoft OneDrive).
+$win32Bloat = @(
+    '^HP Connection Optimizer'
+    '^HP Documentation'
+    '^HP Easy Clean'
+    '^HP Privacy Settings'
+    '^HP QuickDrop'
+    'WebAdvisor'                                         # McAfee WebAdvisor / "WebAdvisor von McAfee"
+    '^Dropbox.*(Promotion|Sonderaktion|Angebot|Offerta|Offer)'
+    '^Lenovo Smart Meeting'
+    '^Intel\(R\) Management and Security Status'
+)
+# Specific uninstall keys (registry key name)
+$win32BloatKeys = @(
+    '{25FB0D7A-ED1B-4663-809E-A54E8A4274B0}_is1'
+)
 
-    foreach ($program in $adware) {
-        winget uninstall --accept-source-agreements --source winget $program
+function Remove-Win32Bloat {
+    $entries = @(Get-UninstallEntries | Where-Object {
+        $name = $_.DisplayName
+        ($win32Bloat | Where-Object { $name -match $_ }) -or ($win32BloatKeys -contains $_.PSChildName)
+    })
+    foreach ($entry in $entries) {
+        $result = Invoke-SilentUninstall -Entry $entry -TimeoutMinutes 10
+        Write-Log "  Win32 bloat '$($entry.DisplayName)': $result"
     }
-}
-
-function Remove-ChromeWebApps {
-    taskkill /f /im chrome.exe
-    & "$PSScriptRoot\AutoHotkey32.exe" "$PSScriptRoot\chrome.ahk"
-    winget uninstall "tabellen"
-    winget uninstall "pr$([char]0xE4)sentationen"
-    winget uninstall "youtube"
-    winget uninstall "google drive"
-    winget uninstall "gmail"
-    winget uninstall "dokumente"
-    taskkill /f /im autohotkey32.exe
+    if ($entries.Count -eq 0) { Write-Log "  No Win32 OEM promo software found" }
 }
 
 # Apps kept intentionally - too useful or disruptive to remove in enterprise
@@ -65,6 +86,7 @@ $excluded = [System.Collections.Generic.HashSet[string]]::new([System.StringComp
     'Microsoft.Edge XPFFTQ037JWMHS'
     'XPFFTQ037JWMHS'
     'Microsoft.Copilot'
+    'XP9CXNGPPJ97XX'            # Copilot's Store ID in upstream's list
     'Microsoft.WindowsCalculator'
     'Microsoft.WindowsNotepad'
     'Microsoft.MSPaint'
@@ -85,35 +107,56 @@ $excluded = [System.Collections.Generic.HashSet[string]]::new([System.StringComp
     'Microsoft.XboxSpeechToTextOverlay'
 ) | ForEach-Object { $null = $excluded.Add($_) }
 
-# OEM bloat and older/alternate package IDs not covered by Win11Debloat
+# OEM tools that must survive: BIOS/driver/firmware updates, Fn keys, battery care, audio and
+# display control. Removing them costs the customer hardware features and future updates.
+@(
+    'AD2F1837.HPSupportAssistant'           # HP: BIOS and driver updates
+    'AD2F1837.HPPowerManager'
+    'AD2F1837.HPSystemInformation'
+    'AD2F1837.HPPCHardwareDiagnosticsWindows'
+    'AD2F1837.HPPrinterControl'             # HP Smart (printers)
+    'AD2F1837.HPQuickTouch'
+    'AD2F1837.myHP'
+    'E046963F.LenovoCompanion'              # Lenovo Vantage: updates, battery conservation, hotkeys
+    'LenovoCompanyLimited.LenovoVantageService'
+    'E0469640.LenovoSettings'
+    'E0469640.LenovoSmartCommunication'
+    'DellInc.DellSupportAssistforPCs'       # Dell: driver, BIOS, firmware updates
+    'DellInc.DellDigitalDelivery'           # software bought with the PC
+    'DellInc.MyDell'
+    'DellInc.DellHelpSupport'
+    'AcerIncorporated.QuickAccess'          # Acer: Bluelight Shield, battery, keyboard light
+    'SAMSUNGELECTRONICSCO.LTD.SamsungSettings1.5'     # Samsung: Fn keys, battery protection, backlight
+    'SAMSUNGELECTRONICSCoLtd.GalaxyBook'              # Samsung Settings on ARM (Book4 Edge)
+    'SAMSUNGELECTRONICSCO.LTD.SamsungSettingsRuntime'
+    'SAMSUNGELECTRONICSCO.LTD.SamsungPCCleaner'       # Samsung Device Care: BIOS and driver updates
+    'SAMSUNGELECTRONICSCO.LTD.SamsungUpdate'          # BIOS/driver updates up to 24H2
+    'SAMSUNGELECTRONICSCO.LTD.SamsungRecovery'
+    'DolbyLaboratories.DolbyAccess'                   # Dolby Atmos tuning (audio feature)
+) | ForEach-Object { $null = $excluded.Add($_) }
+
+# Always removed in addition to upstream's default list: OEM promo/trial apps, and the Widgets
+# packages (upstream removes these three by default through its DisableWidgets feature)
 $oemAndExtras = @(
-    "*Dolby*"
     "*Speed Test*"
     "*Sway*"
     "*Keeper*"
-    "*AsusUpdate*"
     "4E6B5B3A.HUAWEIMobileCloud"
     "HuaweiPCManager"
     "AcerIncorporated.AcerCollection*"
     "AcerIncorporated.AcerPortal"
-    "AcerIncorporated.QuickAccess"
     "AcerIncorporated.UserExperienceProgram"
     "ASUSTeK.GamingCenterService"
     "ASUSTeK.ZenUIStoreROG"
-    "B9EACED6.AsusROGLiveService"
     "DB6EA5DB.MediaSuiteEssentialsforDell"
     "DB6EA5DB.Power2GoforDell"
     "DB6EA5DB.PowerDirectorforDell"
     "DB6EA5DB.PowerMediaPlayerforDell"
     "DellInc.DellCustomerConnect"
-    "DellInc.DellHelpSupport"
     "DellInc.DellProductRegistration"
-    "DellInc.MyDell"
     "E046963F.LenovoSmartCare"
     "E0469640.LenovoExperienceImprovement"
     "E0469640.LenovoID"
-    "E0469640.LenovoSettings"
-    "E0469640.LenovoSmartCommunication"
     "5319275A.WhatsAppDesktop"
     "BytedancePte.Ltd.TikTok"
     "FACEBOOK.317180B0BB486"
@@ -126,6 +169,48 @@ $oemAndExtras = @(
     "Microsoft.Wallet"
     "Microsoft.WindowsPhone"
     "Microsoft.WindowsReadingList"
+    "MicrosoftWindows.Client.WebExperience"
+    "Microsoft.WidgetsPlatformRuntime"
+    "Microsoft.StartExperiencesApp"
+    # Samsung Galaxy Book: Galaxy ecosystem and promo apps (decision: always removed). Hardware
+    # tools are in the keep-list above. Names from Microsoft's Store catalog (displaycatalog).
+    "SAMSUNGELECTRONICSCO*.SamsungWelcome"             # Galaxy Book Experience (app catalog)
+    "SAMSUNGELECTRONICSCO*.SmartSwitchforGalaxyBook"
+    "SAMSUNGELECTRONICSCO*.Bixby"
+    "SAMSUNGELECTRONICSCO*.StudioPlus"
+    "SAMSUNGELECTRONICSCO*.SamsungStudio"
+    "SAMSUNGELECTRONICSCO*.SamsungStudioForGalleryU"
+    "SAMSUNGELECTRONICSCO*.PCGallery"
+    "SAMSUNGELECTRONICSCO*.SamsungNotes"
+    "SAMSUNGELECTRONICSCO*.SmartSelect"
+    "SAMSUNGELECTRONICSCO*.SamsungQuickSearch"
+    "SAMSUNGELECTRONICSCO*.SamsungScreenRecording"
+    "SAMSUNGELECTRONICSCO*.SamsungQuickShare"
+    "SAMSUNGELECTRONICSCO*.SamsungContinuityService"   # Galaxy Connect
+    "SAMSUNGELECTRONICSCO*.MultiControl"
+    "SAMSUNGELECTRONICSCO*.SecondScreen"
+    "SAMSUNGELECTRONICSCO*.16297BCCB59BC"              # Camera Share
+    "SAMSUNGELECTRONICSCO*.4438638898209"              # Storage Share
+    "SAMSUNGELECTRONICSCO*.1412377A9806A"              # Link Sharing
+    "SAMSUNGELECTRONICSCO*.SamsungMyDevices"           # Nearby devices
+    "SAMSUNGELECTRONICSCO*.SamsungFlux"                # Samsung Flow
+    "SAMSUNGELECTRONICSCO*.SamsungPhone"
+    "SAMSUNGELECTRONICSCO*.SamsungFind"
+    "SAMSUNGELECTRONICSCO*.SamsungCloudPlatformManag"
+    "SAMSUNGELECTRONICSCO*.SamsungCloudBluetoothSync"
+    "SAMSUNGELECTRONICSCO*.KnoxMatrixforWindows"
+    "SAMSUNGELECTRONICSCO*.SamsungIntelligenceVoiceS"
+    "SAMSUNGELECTRONICSCO*.SmartThingsWindows"
+    "SAMSUNGELECTRONICSCO*.GalaxyBuds"
+    "SAMSUNGELECTRONICSCO*.SamsungPass"
+    "SAMSUNGELECTRONICSCO*.SamsungParentalControls"
+    "SAMSUNGELECTRONICSCO*.SamsungAccount"
+    "SAMSUNGELECTRONICSCO*.SamsungAccountPluginforSa"
+    # Previously removed through the winget name list; optional upstream
+    "Microsoft.OutlookForWindows"
+    "Microsoft.windowscommunicationsapps"
+    "Microsoft.Whiteboard"
+    "Microsoft.People"
 )
 
 # Try to fetch the latest list from Win11Debloat
@@ -134,12 +219,15 @@ try {
     Write-Output "Fetching latest bloatware list from Win11Debloat..."
     $response = Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Raphire/Win11Debloat/master/Config/Apps.json" `
         -UseBasicParsing -TimeoutSec 15 -ErrorAction Stop
-    $data = $response.Content | ConvertFrom-Json
+    # The file starts with a UTF-8 BOM; ConvertFrom-Json in PowerShell 5.1 fails on it
+    $data = $response.Content.TrimStart([char]0xFEFF) | ConvertFrom-Json
     $fetched = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
     foreach ($app in $data.Apps) {
         $id = $app.AppId.Trim()
         if ($excluded.Contains($id)) { continue }
-        # Never auto-remove what upstream flags unsafe, including entries added after this review
+        # Same choice as upstream's defaults: only apps it removes by default. "Optional"
+        # entries include OEM utilities and apps customers use (Media Player, Phone Link).
+        if (-not $app.SelectedByDefault) { continue }
         if ($app.Recommendation -eq 'unsafe') { continue }
         if ($id -match '\s') { continue }
         if ($id -notmatch '\.' -and $id -notmatch '\*') { $id = "*$id*" }
@@ -155,133 +243,62 @@ try {
     Write-Output "Could not fetch Win11Debloat list ($($_.Exception.Message)) - using built-in fallback."
 }
 
-# Built-in fallback - merged from Win11Debloat + OEM extras as of 2026-05-07
+# Built-in fallback: upstream's default-selected apps as of 2026-10-04 (minus exclusions),
+# plus the OEM extras above
 if (-not $appxToRemove) {
     $appxToRemove = @(
         "*ACGMediaPlayer*"
         "*ActiproSoftwareLLC*"
         "*Asphalt8Airborne*"
-        "*AsusUpdate*"
         "*AutodeskSketchBook*"
         "*CaesarsSlotsFreeCasino*"
         "*COOKINGFEVER*"
         "*CyberLinkMediaSuiteEssentials*"
-        "*Disney*"
         "*DisneyMagicKingdoms*"
-        "*Dolby*"
         "*DrawboardPDF*"
         "*Duolingo-LearnLanguagesforFree*"
         "*EclipseManager*"
-        "*Facebook*"
         "*FarmVille2CountryEscape*"
-        "*fitbit*"
         "*Flipboard*"
         "*HiddenCity*"
         "*iHeartRadio*"
-        "*Instagram*"
-        "*Keeper*"
         "*LinkedInforWindows*"
         "*MarchofEmpires*"
         "*MicrosoftTeams*"
         "*MSTeams*"
-        "*Netflix*"
         "*NYTCrossword*"
         "*OneCalendar*"
         "*PandoraMediaInc*"
         "*PhototasticCollage*"
         "*PicsArt-PhotoStudio*"
-        "*Plex*"
         "*PolarrPhotoEditorAcademicEdition*"
-        "*Shazam*"
         "*SlingTV*"
-        "*Speed Test*"
-        "*Spotify*"
-        "*Sway*"
-        "*TikTok*"
         "*TuneInRadio*"
-        "*Twitter*"
-        "*Viber*"
         "*WinZipUniversal*"
-        "*Wunderlist*"
-        "*XING*"
-        "4E6B5B3A.HUAWEIMobileCloud"
-        "5319275A.WhatsAppDesktop"
-        "AcerIncorporated.AcerCollection*"
-        "AcerIncorporated.AcerPortal"
-        "AcerIncorporated.QuickAccess"
-        "AcerIncorporated.UserExperienceProgram"
-        "AD2F1837.HPAIExperienceCenter"
-        "AD2F1837.HPConnectedMusic"
-        "AD2F1837.HPConnectedPhotopoweredbySnapfish"
-        "AD2F1837.HPDesktopSupportUtilities"
-        "AD2F1837.HPEasyClean"
-        "AD2F1837.HPFileViewer"
-        "AD2F1837.HPJumpStarts"
-        "AD2F1837.HPPCHardwareDiagnosticsWindows"
-        "AD2F1837.HPPowerManager"
-        "AD2F1837.HPPrinterControl"
-        "AD2F1837.HPPrivacySettings"
-        "AD2F1837.HPQuickDrop"
-        "AD2F1837.HPQuickTouch"
-        "AD2F1837.HPRegistration"
-        "AD2F1837.HPSupportAssistant"
-        "AD2F1837.HPSureShieldAI"
-        "AD2F1837.HPSystemInformation"
-        "AD2F1837.HPWelcome"
-        "AD2F1837.HPWorkWell"
-        "AD2F1837.myHP"
+        "4DF9E0F8.Netflix"
         "AdobeSystemsIncorporated.AdobePhotoshopExpress"
         "Amazon.com.Amazon"
         "AmazonVideo.PrimeVideo"
-        "ASUSTeK.GamingCenterService"
-        "ASUSTeK.ZenUIStoreROG"
-        "B9EACED6.AsusROGLiveService"
         "BytedancePte.Ltd.TikTok"
-
-        "DB6EA5DB.MediaSuiteEssentialsforDell"
-        "DB6EA5DB.Power2GoforDell"
-        "DB6EA5DB.PowerDirectorforDell"
-        "DB6EA5DB.PowerMediaPlayerforDell"
-        "DellInc.DellCustomerConnect"
-        "DellInc.DellDigitalDelivery"
-        "DellInc.DellHelpSupport"
-        "DellInc.DellMobileConnect"
-        "DellInc.DellProductRegistration"
-        "DellInc.DellSupportAssistforPCs"
-        "DellInc.MyDell"
-        "E046963F.LenovoCompanion"
-        "E046963F.LenovoSmartCare"
-        "E0469640.LenovoExperienceImprovement"
-        "E0469640.LenovoID"
-        "E0469640.LenovoSettings"
-        "E0469640.LenovoSmartCommunication"
-        "FACEBOOK.317180B0BB486"
+        "Disney.37853FC22B2CE"
         "FACEBOOK.FACEBOOK"
-        "Facebook.Instagram*"
-        "HuaweiPCManager"
+        "Facebook.Instagram"
+        "flaregamesGmbH.RoyalRevolt"
         "HULULLC.HULUPLUS"
         "king.com.BubbleWitch3Saga"
         "king.com.CandyCrushSaga"
         "king.com.CandyCrushSodaSaga"
-        "LenovoCompanyLimited.LenovoVantageService"
         "Microsoft.3DBuilder"
         "Microsoft.549981C3F5F10"
-        "Microsoft.Appconnector"
         "Microsoft.BingFinance"
         "Microsoft.BingFoodAndDrink"
         "Microsoft.BingHealthAndFitness"
         "Microsoft.BingNews"
-        "Microsoft.BingSearch"
         "Microsoft.BingSports"
         "Microsoft.BingTranslator"
         "Microsoft.BingTravel"
         "Microsoft.BingWeather"
-        "Microsoft.CommsPhone"
-        "Microsoft.ConnectivityStore"
-        "Microsoft.GamingApp"
-        "Microsoft.GetHelp"
         "Microsoft.Getstarted"
-        "Microsoft.M365Companions"
         "Microsoft.Messaging"
         "Microsoft.Microsoft3DViewer"
         "Microsoft.MicrosoftJournal"
@@ -294,48 +311,26 @@ if (-not $appxToRemove) {
         "Microsoft.Office.OneNote"
         "Microsoft.Office.Sway"
         "Microsoft.OneConnect"
-        "Microsoft.OutlookForWindows"
         "Microsoft.PCManager"
-        "Microsoft.People"
         "Microsoft.PowerAutomateDesktop"
         "Microsoft.Print3D"
         "Microsoft.SkypeApp"
-        "Microsoft.StartExperiencesApp"
         "Microsoft.Todos"
-        "Microsoft.Wallet"
-        "Microsoft.Whiteboard"
-        "Microsoft.WidgetsPlatformRuntime"
         "Microsoft.Windows.AIHub"
         "Microsoft.Windows.DevHome"
-        "Microsoft.windowscommunicationsapps"
         "Microsoft.WindowsFeedbackHub"
         "Microsoft.WindowsMaps"
-        "Microsoft.WindowsPhone"
-        "Microsoft.WindowsReadingList"
         "Microsoft.WindowsSoundRecorder"
-        "Microsoft.Xbox.TCUI"
         "Microsoft.XboxApp"
-        "Microsoft.XboxGameOverlay"
-        "Microsoft.XboxGamingOverlay"
-        "Microsoft.XboxIdentityProvider"
-        "Microsoft.XboxSpeechToTextOverlay"
-        "Microsoft.YourPhone"
-        "Microsoft.ZuneMusic"
         "Microsoft.ZuneVideo"
         "MicrosoftCorporationII.MicrosoftFamily"
-        "MicrosoftWindows.Client.WebExperience"
-        "MicrosoftWindows.CrossDevice"
         "Sidia.LiveWallpaper"
         "SpotifyAB.SpotifyMusic"
-    )
+    ) + $oemAndExtras
 }
 
 # Applies to the built-in fallback too, so the exclusions hold either way
 $appxToRemove = @($appxToRemove | Where-Object { -not $excluded.Contains($_) })
 Remove-UWPApp -AppxPackages $appxToRemove
-uninstallfun
+Remove-Win32Bloat
 Import-TelemetryRegistry
-$gmailCheck = & winget list -q "gmail" --accept-source-agreements 2>&1
-if ($gmailCheck -match "gmail") {
-    Remove-ChromeWebApps
-}

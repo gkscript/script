@@ -167,7 +167,7 @@ A disciplined palette: one brand blue in two strengths, three status signals, an
 
 ### Hierarchy
 - **Display** (600, 32px): the band headline, one per window ("Netixx Grundkonfiguration", "Setup complete", "Finished with 3 warnings").
-- **Subline** (400, 14px): the single line under the headline (profile, machine, duration; or "Choose a setup profile · v1.3.0").
+- **Subline** (400, 14px): the single line under the headline (profile, machine, duration; or "Choose a setup profile · v2.0.0").
 - **Title** (600, 15px): the profile name in a profile row.
 - **Heading** (600, 14px): the one section heading below the band ("Needs attention", "What went wrong").
 - **Body** (400, 13px, 19px line height): list items, button labels, the restart line.
@@ -224,6 +224,14 @@ The colored top field of every window, and the system's signal.
 - **Result:** the status color, with the solid status mark (60 px glyph), a status headline and a subline (profile · machine · duration, plus "Restart required" when pending).
 - **Reach:** DWM paints the title bar and window border in the band color, so the band starts at the window's top edge. Result windows also set a full green, amber or red taskbar button (`TaskbarItemInfo`).
 
+### Toggle Switch
+The "install all updates" switch sits in the menu below the profile rows. The setting it controls is real: `-SkipUpdates` when off.
+- **Container:** the same surface as a profile row (`control-fill`, 1 px `control-stroke`, 6 px radius, 12 px × 16 px padding, 18 px on the left).
+- **Content:** the label (14px semibold) and a hint (Label, Graphite) on the left; the Windows 11 toggle shape (40 × 20, 10 px radius) on the right.
+- **States:** off is a grey outline with a grey thumb on the left; on is a `netixx-signal-blue` track with a white thumb on the right.
+- **Hover and focus:** hover darkens the outline, and keyboard focus gives an ink outline plus the focus ring.
+- The setting is on by default.
+
 ### Language Chips
 Quiet DE · EN · IT selector in the top-right corner of the menu band, sitting in the band's top padding. The chips are grouped radio buttons (`LanguageChip`), 12px, with 7 px × 2 px padding and a 4px radius.
 - **Inactive:** the band's tinted subline color, with no fill.
@@ -231,6 +239,12 @@ Quiet DE · EN · IT selector in the top-right corner of the menu band, sitting 
 - **Hover:** 10% white fill.
 - **Focus:** white 1 px stroke plus the white `BandFocusRing`, because an ink ring would disappear on blue.
 - **Labels and names:** the labels are language codes and never get translated. The screen-reader names use each language's own name (Deutsch, English, Italiano).
+
+### Notes (result window)
+These are steps left to the technician that are not problems, such as confirming default apps for the current account.
+- **Placement:** below the attention list.
+- **Style:** a 13 px info icon (`netixx-deep-blue`) with Graphite body text.
+- **Effect:** they never change the band color, so they never turn a green run yellow.
 
 ### Attention List
 The body of a warning or failure result: a Heading, then items made of a 13 px triangle icon (`caution-icon`, or `fault-red` for failures) and body text, 9 px apart, scrolling past 232 px. When nothing needs attention it collapses to one plain line. When a restart is the only open item, the restart becomes the heading.

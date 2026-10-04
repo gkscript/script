@@ -1,0 +1,74 @@
+Windows Registry Editor Version 5.00
+
+; Per-user settings: Windows suggestions, ads, auto-installed "suggested" apps and nags,
+; plus taskbar "End task".
+; Values from Win11Debloat (github.com/Raphire/Win11Debloat, Regfiles/, 2026-10).
+; Applied to the setup account (Step 4) and to the Default user profile (Step 11b),
+; so the customer's own account, created later, starts without them as well.
+; Keep this file ASCII: reg.exe accepts ANSI or UTF-16 LE, never UTF-8 with BOM.
+
+; "Windows welcome experience" after updates and at sign-in
+[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager]
+"SubscribedContent-310093Enabled"=dword:00000000
+; Suggestions in Start
+"SubscribedContent-338388Enabled"=dword:00000000
+"SystemPaneSuggestionsEnabled"=dword:00000000
+; Tips, tricks and suggestions while using Windows
+"SubscribedContent-338389Enabled"=dword:00000000
+"SoftLandingEnabled"=dword:00000000
+; Suggested content in the Settings app
+"SubscribedContent-338393Enabled"=dword:00000000
+"SubscribedContent-353694Enabled"=dword:00000000
+"SubscribedContent-353696Enabled"=dword:00000000
+"SubscribedContent-353698Enabled"=dword:00000000
+; Automatic installation of suggested apps
+"SilentInstalledAppsEnabled"=dword:00000000
+; Fun facts and tips on the lock screen (the Spotlight picture itself stays)
+"SubscribedContent-338387Enabled"=dword:00000000
+"RotatingLockScreenOverlayEnabled"=dword:00000000
+
+; Start: recommendations for tips, shortcuts and new apps; account notifications;
+; sync provider (OneDrive) ads in Explorer; Chat/Teams button on the taskbar
+[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced]
+"Start_IrisRecommendations"=dword:00000000
+"Start_AccountNotifications"=dword:00000000
+"ShowSyncProviderNotifications"=dword:00000000
+"TaskbarMn"=dword:00000000
+
+; Notifications in the Settings app
+[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\SystemSettings\AccountNotifications]
+"EnableAccountNotifications"=dword:00000000
+
+; "Finish setting up your device" prompts
+[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\UserProfileEngagement]
+"ScoobeSystemSettingEnabled"=dword:00000000
+
+; "Suggested" notifications (ads for Microsoft services) and Windows Backup reminders
+[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\Windows.SystemToast.Suggested]
+"Enabled"=dword:00000000
+
+[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\Windows.SystemToast.BackupReminder]
+"Enabled"=dword:00000000
+
+; Phone Link suggestions
+[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Mobility]
+"OptedIn"=dword:00000000
+
+; Bing web results in Windows search
+[HKEY_CURRENT_USER\Software\Policies\Microsoft\Windows\Explorer]
+"DisableSearchBoxSuggestions"=dword:00000001
+
+; Recall snapshots and Click to Do (Copilot+ PCs; no effect elsewhere)
+[HKEY_CURRENT_USER\Software\Policies\Microsoft\Windows\WindowsAI]
+"DisableAIDataAnalysis"=dword:00000001
+"DisableClickToDo"=dword:00000001
+
+; "End task" in the taskbar right-click menu (Win11Debloat Enable_End_Task.reg)
+[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced\TaskbarDeveloperSettings]
+"TaskbarEndTask"=dword:00000001
+
+; Windows Terminal hosts command-line windows (default since 22H2; set explicitly so it does not
+; depend on automatic selection). GUIDs from Microsoft support / Terminal package manifest.
+[HKEY_CURRENT_USER\Console\%%Startup]
+"DelegationConsole"="{2EACA947-7F5F-4CFA-BA87-8F7FBEEFBE69}"
+"DelegationTerminal"="{E12CFF52-A866-4C77-9A90-F570A7AA2C6B}"

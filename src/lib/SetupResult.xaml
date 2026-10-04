@@ -74,6 +74,24 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
                 <TextBlock x:Name="RestartText" Grid.Column="1" FontWeight="SemiBold" TextWrapping="Wrap"/>
             </Grid>
 
+            <!-- Notes: steps left to the technician that are not problems (no effect on the band color) -->
+            <ItemsControl x:Name="NotesList" Margin="0,10,0,0" Focusable="False" Visibility="Collapsed">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Grid Margin="0,0,0,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="22"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="&#xE946;" Style="{StaticResource InlineIcon}"
+                                       Foreground="{StaticResource NetixxBlueDeep}"/>
+                            <TextBlock Grid.Column="1" Text="{Binding}" TextWrapping="Wrap" LineHeight="19"
+                                       Foreground="{StaticResource TextSecondary}"/>
+                        </Grid>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
             <!-- Log path: selectable so it can be copied -->
             <Grid x:Name="LogRow" Margin="0,18,0,0">
                 <Grid.ColumnDefinitions>

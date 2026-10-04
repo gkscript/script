@@ -107,6 +107,9 @@ Function Get-MenuDataContext {
         WindowTitle = $state.WindowTitle
         Subtitle = $subtitle
         Footer = Get-UiText menu.footer
+        UpdatesEnabled = [bool]$state.UpdatesEnabled
+        UpdatesLabel = Get-UiText menu.updates
+        UpdatesHint = Get-UiText menu.updatesHint
         IconPath = $state.IconPath
         MenuItems = @($items)
         IsDe = $lang -eq 'de'
@@ -124,6 +127,8 @@ Function Invoke-ButtonAction {
     # Get relevant CSV row (a copy: the {lang} placeholder is filled per launch)
     $csvMatch = $script:csvData | Where-Object {$_.Reference -eq $buttonName} | Select-Object *
     $csvMatch.Command = $csvMatch.Command.Replace('{lang}', (Get-UiLanguage))
+    $updatesSwitch = if ($script:menuState.UpdatesEnabled) { '' } else { '-SkipUpdates' }
+    $csvMatch.Command = $csvMatch.Command.Replace('{updates}', $updatesSwitch).TrimEnd()
     Write-Verbose $csvMatch
 
     # Pipe match to Start-Script function

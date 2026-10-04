@@ -116,6 +116,8 @@ Function Show-ScriptMenuGui {
         IconPath = if ($iconPath) { (Resolve-Path $iconPath).Path } else { $null }
         ButtonBackgroundColor = $buttonBackgroundColor
         ButtonForegroundColor = $buttonForegroundColor
+        # "Install all updates" switch: on by default; off passes -SkipUpdates via {updates}
+        UpdatesEnabled = $true
     }
     Set-UiLanguage $language
     $form.DataContext = Get-MenuDataContext
@@ -126,6 +128,11 @@ Function Show-ScriptMenuGui {
         param($origin, $routed)
         $control = $routed.OriginalSource
 
+        if ($control -is [System.Windows.Controls.CheckBox]) {
+            # Updates switch
+            $script:menuState.UpdatesEnabled = [bool]$control.IsChecked
+            return
+        }
         if ($control -is [System.Windows.Controls.RadioButton]) {
             # Language chip: Tag is the language code
             Set-UiLanguage $control.Tag

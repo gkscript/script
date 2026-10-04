@@ -18,27 +18,31 @@ The menu opens in German. Switch to English or Italian with **DE · EN · IT** i
 
 | | Profile | Packages |
 |---|---|---|
-| 💼 | Business | VLC · Firefox · Chrome · 7-Zip · Adobe Reader |
+| 💼 | Business | VLC · Firefox · Chrome · 7-Zip · Adobe Reader · PowerToys |
 | 🏠 | Consumer | + LibreOffice · Paint.NET |
 | ⚡ | Consumer (No LibreOffice) | + Paint.NET |
 
-All profiles include: GPU and Windows Update drivers, Office 365 uninstall, OEM branding, Netixx Helpdesk, registry tweaks, bloatware/UWP removal, file associations, desktop layout.
+Packages come from winget (vendor installers, hash-checked); Chocolatey is only a fallback and is removed afterwards.
+
+All profiles include: all Windows updates (switchable in the menu), Office 365 uninstall, OEM branding, Netixx Helpdesk, bloatware/UWP removal (incl. Samsung Galaxy apps), Windows suggestions/ads off, clean Start pins, daily Bing wallpaper, default apps for new accounts, desktop layout, cleanup and a restore point.
 
 ## What it does (in order)
 
 1. Pre-flight checks — admin, internet, time sync, disk space (5 GB), GPU, BitLocker
-2. Install Chocolatey
-3. Install packages (3-attempt retry + verification per package)
-4. Install GPU tools (NVIDIA App / Intel Graphics Command Center), then all pending drivers from Windows Update (covers AMD)
-5. Apply registry settings and OEM branding
-6. Remove bloatware shortcuts, clean desktop (whitelist-based)
+2. Remove preinstalled antivirus trials silently where possible; the rest is flagged for manual removal
+3. Install packages with winget (Firefox in the Windows language; Chrome and PowerToys machine-wide); Chocolatey only if winget fails
+4. **Windows Update** (unless switched off in the menu): every available update — drivers (covers AMD), security/quality, optional and preview updates, feature upgrades, Defender definitions; then the NVIDIA App on NVIDIA GPUs
+5. Registry and system settings: OEM branding, Windows suggestions/ads/Widgets/Recall/Edge ads off, Storage Sense, Fast Startup off, End task in the taskbar, Windows Terminal as default console, Defender blocks unwanted apps, sudo (new-window mode), notebook power settings on AC
+6. Remove bloatware shortcuts, clean desktop shortcuts (whitelist-based; never on a OneDrive-redirected desktop)
 7. Disable BitLocker if encrypted
-8. Set up `C:\Install`, download the Netixx Helpdesk (signature-checked)
+8. Set up `C:\Install` (locked down), download the Netixx Helpdesk (signature-checked)
 9. Uninstall Office 365 (Office Deployment Tool → winget → silent registry fallback)
-10. Remove UWP bloat (live Win11Debloat list minus "unsafe" entries + OEM extras, offline fallback)
-11. Set default file associations
-12. Apply desktop icon layout, restart Explorer
-13. Show the result window: green done / yellow warnings / red failed, with the warnings listed and a restart button when drivers need it
+10. Remove UWP bloat (Win11Debloat's default selection, OEM promo apps, Samsung Galaxy ecosystem apps; OEM update/hotkey/battery tools are kept) and Win32 promo software; then update installed apps with winget
+11. Prepare accounts created later (the customer's): Default profile settings, default apps via DISM; clean Start pins (applied once); daily Bing wallpaper (4K) for every account
+12. Health checks: activation, Defender, edition vs. profile
+13. Clean up: update leftovers (DISM), Chocolatey, temp files, recycle bin; setup files removed at the next start; restore point
+14. Apply desktop icon layout, restart Explorer
+15. Show the result window: green done / yellow warnings / red failed, warnings listed, restart button when needed, reminder to confirm default apps for the current account
 
 The PC and display are kept awake for the whole run, so the result is on screen when you come back.
 
@@ -75,6 +79,7 @@ powershell -ExecutionPolicy Bypass -File src\main.ps1 -DeploymentType consumer
 powershell -ExecutionPolicy Bypass -File src\main.ps1 -DeploymentType consumer-nolo
 
 # Optional flags
+-SkipUpdates            # No Windows Update and no app updates
 -SkipBloatwareRemoval   # Skip bloat/shortcut cleanup
 -SkipHideConsole        # Keep the console window visible
 -ConfigPath <path>      # Use alternate config.json
@@ -89,28 +94,46 @@ launch.bat              → UAC elevation → PowerShell GUI
 build.ps1               → builds gk-script.exe via NSIS
 src/
 ├── main.ps1            → main orchestration script
-├── config.json         → deployment profiles, package lists, paths
+├── config.json         → deployment profiles, package catalog (winget/Chocolatey IDs), paths
 ├── gui.csv             → WPF menu button definitions
-├── debloat.ps1         → UWP removal, winget uninstalls, telemetry disable
+├── debloat.ps1         → UWP + Win32 bloat removal, telemetry disable
+├── BingWallpaper.ps1   → daily Bing wallpaper (copied to C:\Install, run per user by a task)
+├── user_settings.reg / machine_settings.reg → Windows suggestions, policies, system settings
+├── lang/               → UI texts (de, en, it)
 ├── lib/
 │   ├── PSSetupUtility.psm1   → shared utilities (logging, pre-flight, result window)
 │   ├── Theme.xaml            → shared look of all windows
 │   ├── WindowTheme.ps1       → theme loader, Mica, title-bar color
+│   ├── Language.ps1          → UI language and text lookup
 │   └── SetupResult.xaml      → end-of-run result window
 └── PSScriptMenuGui/    → WPF CSV-driven menu module
 ```
 
 ## Customisation
 
-- **Packages**: edit `src/config.json` — add/remove from the `packages` array per profile
-- **Bloat exclusions**: edit `$excluded` set in `src/debloat.ps1`
+- **Packages**: edit `src/config.json` — `packages` per profile; winget/Chocolatey IDs in `packageCatalog`
+- **Bloat exclusions / OEM keep-list**: edit `$excluded` in `src/debloat.ps1`; extra removals in `$oemAndExtras` / `$win32Bloat`
 - **Desktop icons to keep**: edit `src/whitelist.txt`
-- **OEM branding**: replace `src/oemlogo.bmp` and `src/Logo_Info.reg`
+- **OEM branding**: edit `src/Logo_Info.reg` (Windows 11 shows the support texts; it no longer displays an OEM logo)
 - **Menu buttons**: edit `src/gui.csv` (`Icon` = Segoe Fluent Icons code, e.g. `E821`)
 - **Window look**: edit `src/lib/Theme.xaml` (rules in `DESIGN.md`)
 - **Texts / translations**: edit `src/lang/de.json`, `en.json`, `it.json` (same keys in all three)
 
 ## Changelog
+
+### v2.0.0 — 2026-10-04
+- Safety: Explorer's Winlogon Shell value is always restored (finally); desktop cleanup removes only shortcuts, never on a OneDrive-redirected desktop, and now also cleans the Public Desktop; `C:\Install` is no longer writable by all users
+- Debloat follows Win11Debloat's default selection (live list now actually loads on PowerShell 5.1); OEM tools for BIOS/driver updates, Fn keys and battery care are kept; the "office" uninstall that could hit OneDrive is gone
+- New user accounts (the customer's own) get the same settings via the Default profile, and default apps via DISM
+- Windows suggestions/ads, auto-installed suggested apps, Widgets, Recall/Click to Do and Edge ads turned off
+- Preinstalled antivirus trials removed silently where possible, otherwise flagged; final checks for activation, Defender and edition; any pending reboot is offered
+- Windows Update installs everything available, not only drivers: security/quality, optional and preview updates, feature upgrades, Defender definitions; installed apps are updated with winget (registered when missing); menu switch to run without updates (`-SkipUpdates`)
+- Packages from winget (Firefox DE/IT, Chrome without checksum bypass, Adobe with auto-update, current LibreOffice); Chocolatey only as fallback and removed afterwards; PowerToys on every profile; NVIDIA App on every NVIDIA GPU; Intel step removed (package did not exist)
+- Samsung Galaxy Book: ecosystem and promo apps removed, Samsung Settings / Device Care / Update / Recovery kept
+- Default apps: SetUserFTA removed (blocked on Windows 11 Home/Pro, non-commercial licence) - new accounts get them via DISM, the result window reminds the technician for the current account
+- Clean Start menu pins (applied once), daily Bing wallpaper in 4K for every account, End task in the taskbar, Windows Terminal as default, sudo enabled, Storage Sense, Fast Startup off, Defender blocks unwanted apps, notebook power settings
+- Cleanup at the end (update leftovers, temp files, recycle bin, setup files at next start) and a restore point
+- Win32 promo software removed silently by registry match (language-independent); AutoHotkey Chrome web-app step and the unused OEM logo removed
 
 ### v1.3.0 — 2026-10-04
 - Multilingual UI: German (default), English, Italian, switchable in the menu (DE · EN · IT); menu, result window and the listed warnings are translated, the log stays English
