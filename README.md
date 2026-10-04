@@ -20,23 +20,25 @@ Copy `gk-script.exe` to the target machine and double-click it. UAC elevation is
 | 🏠 | Consumer | + LibreOffice · Paint.NET |
 | ⚡ | Consumer (No LibreOffice) | + Paint.NET |
 
-All profiles include: AV removal, GPU driver install, Office 365 uninstall, OEM branding, registry tweaks, bloatware/UWP removal, file associations, desktop layout.
+All profiles include: GPU and Windows Update drivers, Office 365 uninstall, OEM branding, Netixx Helpdesk, registry tweaks, bloatware/UWP removal, file associations, desktop layout.
 
 ## What it does (in order)
 
-1. Pre-flight checks — admin, internet, disk space (5 GB), Windows version, GPU, BitLocker
-2. Remove pre-installed AV — McAfee, Norton, HP Wolf, Avast, AVG, Trend Micro
-3. Install Chocolatey
-4. Install packages (3-attempt retry + verification per package)
-5. Install GPU drivers — NVIDIA / AMD / Intel auto-detected
-6. Apply registry settings, OEM branding, desktop layout
-7. Remove bloatware shortcuts, clean desktop (whitelist-based)
-8. Disable BitLocker if encrypted
-9. Copy assets to `C:\Install`
-10. Uninstall Office 365 (winget + registry fallback + language-variant detection)
-12. Remove UWP bloat (live Win11Debloat list + OEM extras, with offline fallback)
-13. Set default file associations
-14. Apply desktop icon layout, restart Explorer
+1. Pre-flight checks — admin, internet, time sync, disk space (5 GB), GPU, BitLocker
+2. Install Chocolatey
+3. Install packages (3-attempt retry + verification per package)
+4. Install GPU tools (NVIDIA App / Intel Graphics Command Center), then all pending drivers from Windows Update (covers AMD)
+5. Apply registry settings and OEM branding
+6. Remove bloatware shortcuts, clean desktop (whitelist-based)
+7. Disable BitLocker if encrypted
+8. Set up `C:\Install`, download the Netixx Helpdesk (signature-checked)
+9. Uninstall Office 365 (Office Deployment Tool → winget → silent registry fallback)
+10. Remove UWP bloat (live Win11Debloat list minus "unsafe" entries + OEM extras, offline fallback)
+11. Set default file associations
+12. Apply desktop icon layout, restart Explorer
+13. Show the result window: green done / yellow warnings / red failed, with the warnings listed and a restart button when drivers need it
+
+The PC and display are kept awake for the whole run, so the result is on screen when you come back.
 
 ## Logs
 
@@ -88,7 +90,10 @@ src/
 ├── gui.csv             → WPF menu button definitions
 ├── debloat.ps1         → UWP removal, winget uninstalls, telemetry disable
 ├── lib/
-│   └── PSSetupUtility.psm1   → shared utilities (logging, pre-flight, GPU, BitLocker)
+│   ├── PSSetupUtility.psm1   → shared utilities (logging, pre-flight, result window)
+│   ├── Theme.xaml            → shared look of all windows
+│   ├── WindowTheme.ps1       → theme loader, Mica, title-bar color
+│   └── SetupResult.xaml      → end-of-run result window
 └── PSScriptMenuGui/    → WPF CSV-driven menu module
 ```
 
@@ -98,9 +103,20 @@ src/
 - **Bloat exclusions**: edit `$excluded` set in `src/debloat.ps1`
 - **Desktop icons to keep**: edit `src/whitelist.txt`
 - **OEM branding**: replace `src/oemlogo.bmp` and `src/Logo_Info.reg`
-- **Menu buttons**: edit `src/gui.csv`
+- **Menu buttons**: edit `src/gui.csv` (`Icon` = Segoe Fluent Icons code, e.g. `E821`)
+- **Window look**: edit `src/lib/Theme.xaml` (rules in `DESIGN.md`)
 
 ## Changelog
+
+### v1.2.0 — 2026-10-04
+- New result window replaces all message boxes: green / yellow / red status band (also in title bar and taskbar), warnings listed, Open log, Restart now when drivers need it
+- Menu redesigned on the same Windows 11 window system (Mica, settings-card rows, Fluent icons); one shared theme for all windows
+- Windows Update driver install on every machine (covers AMD, which has no package source)
+- Office removal: silent Office Deployment Tool restored as first pass; never opens the interactive uninstall wizard
+- PC and display kept awake during the run
+- Helpdesk download is signature-checked (TeamViewer) before it lands on the desktop
+- Fixed: every message box crashed on PowerShell 5.1 (WinForms not loaded), which also turned successful runs into "Setup failed"
+- Fixed: native-command errors aborting the whole run; killed installers counted as success; NVIDIA App skipped when any NVIDIA component existed; debloat stopping at the first non-removable app; unsafe Win11Debloat removals; empty log path in messages
 
 ### v1.1.2 — 2026-05-07
 - Removed redundant GUI header; title bar shows version
