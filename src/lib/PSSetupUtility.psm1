@@ -460,10 +460,13 @@ Function Invoke-SilentUninstall {
         'timeout'; the caller decides how loudly to report it.
     .PARAMETER Entry
         An uninstall-registry entry (Get-ItemProperty of ...\Uninstall\*)
+    .PARAMETER UninstallStringIsSilent
+        The vendor documents the plain UninstallString as silent (OneDriveSetup.exe /uninstall)
     #>
     param(
         [Parameter(Mandatory)]$Entry,
-        [int]$TimeoutMinutes = 15
+        [int]$TimeoutMinutes = 15,
+        [switch]$UninstallStringIsSilent
     )
 
     $command = $null
@@ -473,6 +476,9 @@ Function Invoke-SilentUninstall {
     }
     elseif ($Entry.QuietUninstallString) {
         $command = $Entry.QuietUninstallString
+    }
+    elseif ($UninstallStringIsSilent -and $Entry.UninstallString) {
+        $command = $Entry.UninstallString
     }
     if (-not $command) { return 'manual' }
 

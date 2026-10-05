@@ -106,6 +106,7 @@ The step numbers below match the `Write-Log "Step N"` messages in the code.
     - The offline fallback is the same default selection as of 2026-10-04.
     - Per-user removal and deprovisioning have separate try blocks.
   - **Win32 promo/trial software:** `Remove-Win32Bloat` matches the uninstall-registry `DisplayName` (language-independent) and uninstalls through `Invoke-SilentUninstall`. Kept on purpose: HP System Event Utility, HP Smart/myHP, Intel Optane tools. The old "office" winget name also matched OneDrive, so it is gone.
+  - **OneDrive** is uninstalled on every profile (`Remove-OneDrive`: `OneDriveSetup.exe /uninstall [/allusers]`, silent by design, hence `Invoke-SilentUninstall -UninstallStringIsSilent`). `user_settings.reg` deletes the Run value `OneDriveSetup`, which installs OneDrive at an account's first sign-in. Because `user_settings.reg` is also imported into the Default profile, accounts created later don't get it back.
   - `disable_telemetry.reg`.
   - Then `Logo_Info.reg` is re-applied, because OEM services can reset `OEMInformation`. Branding is Manufacturer, SupportProvider, phone and URL; the Logo value is deprecated and no longer shown in Windows 11.
   - **10b.** Unless `-SkipUpdates`: `winget upgrade --all --source winget`, silently, with a 30-min timeout.
@@ -170,6 +171,14 @@ Logs go to `C:\Logs\PSScriptSetup\setup_YYYYMMDD_HHmmss.log` (from `config.loggi
 ## Encoding Pitfalls
 
 These have caused real runtime bugs. Understand them before editing any source file.
+
+### 32-bit launcher (the exe)
+The NSIS stub of `gk-script.exe` is a 32-bit process, and every child inherits that: a plain `powershell` started from it is `SysWOW64\...\powershell.exe`.
+- A 32-bit PowerShell writes `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion` (OEMInformation, Uninstall) and `Winlogon` to `WOW6432Node`. `HKLM\SOFTWARE\Policies` is shared and was unaffected.
+- It sees only the 32-bit half of the uninstall registry, and it gets the 32-bit DISM.
+- `launch.bat` therefore starts `%SystemRoot%\Sysnative\...\powershell.exe` when that path exists, and `main.ps1` relaunches itself in 64-bit (forwarding its parameters) when started from any 32-bit process.
+- Testing from VS Code or a normal console never shows this. To reproduce the exe's context, start from `%SystemRoot%\SysWOW64\cmd.exe`.
+
 
 ### PowerShell 5.x script encoding
 Deployed machines run Windows PowerShell 5.1, which reads `.ps1` files as **Windows-1252** unless they have a UTF-8 BOM. A UTF-8 em dash (U+2014) is the 3 bytes `E2 80 94`, and `0x94` maps to `"` in Windows-1252. That **closes a string literal early** and causes parse errors. The bug does not reproduce in VS Code or pwsh 7, which default to UTF-8.

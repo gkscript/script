@@ -22,6 +22,24 @@ param(
     [switch]$SkipUpdates
 )
 
+# gk-script.exe's NSIS stub is a 32-bit process, and everything it starts inherits that. A 32-bit
+# PowerShell writes HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion (OEMInformation) and Winlogon
+# to WOW6432Node, sees only 32-bit programs in the uninstall registry and gets the 32-bit DISM.
+# launch.bat starts the 64-bit PowerShell; this catches any other 32-bit caller.
+if ([Environment]::Is64BitOperatingSystem -and -not [Environment]::Is64BitProcess) {
+    $relaunch = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"")
+    foreach ($parameter in $PSBoundParameters.GetEnumerator()) {
+        if ($parameter.Value -is [System.Management.Automation.SwitchParameter]) {
+            if ($parameter.Value.IsPresent) { $relaunch += "-$($parameter.Key)" }
+        } else {
+            $relaunch += "-$($parameter.Key)", "`"$($parameter.Value)`""
+        }
+    }
+    $native = Start-Process -FilePath "$env:SystemRoot\Sysnative\WindowsPowerShell\v1.0\powershell.exe" `
+        -ArgumentList $relaunch -NoNewWindow -Wait -PassThru
+    exit $native.ExitCode
+}
+
 # Stop on first error
 $ErrorActionPreference = 'Stop'
 
@@ -457,8 +475,8 @@ Function Set-RegistrySettings {
         foreach ($regFile in $RegistryFiles) {
             if (Test-Path $regFile) {
                 Write-Log "  Importing: $regFile"
-                & "$env:SystemRoot\System32\reg.exe" import $regFile
-                
+                $null = Invoke-NativeCommand "$env:SystemRoot\System32\reg.exe" @('import', $regFile)
+
                 if ($LASTEXITCODE -ne 0) {
                     Write-Log "    Registry import returned exit code $LASTEXITCODE" -Level Warning -Key warn.regImport -KeyArgs (Split-Path $regFile -Leaf), $LASTEXITCODE
                 }
@@ -1649,11 +1667,12 @@ try {
         $brandingReg = "$PSScriptRoot\Logo_Info.reg"
         if (Test-Path $brandingReg) {
             Write-Log "Re-applying OEM branding registry..."
-            try {
-                $null = & "$env:SystemRoot\System32\reg.exe" import "$brandingReg" 2>&1
+            # reg.exe reports success on stderr, so a plain 2>&1 under 'Stop' threw on every run
+            $out = Invoke-NativeCommand "$env:SystemRoot\System32\reg.exe" @('import', $brandingReg)
+            if ($LASTEXITCODE -eq 0) {
                 Write-Log "OEM branding applied" -Level Success
-            } catch {
-                Write-Log "OEM branding registry warning: $_" -Level Warning -Key warn.branding -KeyArgs "$_"
+            } else {
+                Write-Log "OEM branding registry warning: $($out -join ' ')" -Level Warning -Key warn.branding -KeyArgs ($out -join ' ')
             }
         }
     }

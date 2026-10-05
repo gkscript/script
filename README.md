@@ -24,7 +24,7 @@ The menu opens in German. Switch to English or Italian with **DE · EN · IT** i
 
 Packages come from winget (vendor installers, hash-checked); Chocolatey is only a fallback and is removed afterwards.
 
-All profiles include: all Windows updates (switchable in the menu), Office 365 uninstall, OEM branding, Netixx Helpdesk, bloatware/UWP removal (incl. Samsung Galaxy apps), Windows suggestions/ads off, clean Start pins, daily Bing wallpaper, default apps for new accounts, desktop layout, cleanup and a restore point.
+All profiles include: all Windows updates (switchable in the menu), Office 365 uninstall, OEM branding, Netixx Helpdesk, bloatware/UWP removal (incl. Samsung Galaxy apps), OneDrive uninstalled, Windows suggestions/ads off, clean Start pins, daily Bing wallpaper, default apps for new accounts, desktop layout, cleanup and a restore point.
 
 ## What it does (in order)
 
@@ -37,7 +37,7 @@ All profiles include: all Windows updates (switchable in the menu), Office 365 u
 7. Disable BitLocker if encrypted
 8. Set up `C:\Install` (locked down), download the Netixx Helpdesk (signature-checked)
 9. Uninstall Office 365 (Office Deployment Tool → winget → silent registry fallback)
-10. Remove UWP bloat (Win11Debloat's default selection, OEM promo apps, Samsung Galaxy ecosystem apps; OEM update/hotkey/battery tools are kept) and Win32 promo software; then update installed apps with winget
+10. Remove UWP bloat (Win11Debloat's default selection, OEM promo apps, Samsung Galaxy ecosystem apps; OEM update/hotkey/battery tools are kept) and Win32 promo software; uninstall OneDrive (also kept from installing in accounts created later); then update installed apps with winget
 11. Prepare accounts created later (the customer's): Default profile settings, default apps via DISM; clean Start pins (applied once); daily Bing wallpaper (4K) for every account
 12. Health checks: activation, Defender, edition vs. profile
 13. Clean up: update leftovers (DISM), Chocolatey, temp files, recycle bin; setup files removed at the next start; restore point
@@ -120,6 +120,11 @@ src/
 - **Texts / translations**: edit `src/lang/de.json`, `en.json`, `it.json` (same keys in all three)
 
 ## Changelog
+
+### v2.0.1 — 2026-10-05
+- Fixed: the exe ran the whole setup in 32-bit PowerShell (the NSIS stub is 32-bit). OEM support info and other `HKLM\SOFTWARE` writes landed in `WOW6432Node`, 64-bit programs were invisible to the antivirus/Office/promo-software removal, and Explorer's Winlogon switch hit the wrong key. `launch.bat` now starts the 64-bit PowerShell, and `main.ps1` restarts itself in 64-bit if started from a 32-bit process.
+- Fixed: re-applying the OEM branding reported a bogus warning on every run ("Der Vorgang wurde erfolgreich beendet.")
+- OneDrive is uninstalled silently, and accounts created later no longer install it at first sign-in
 
 ### v2.0.0 — 2026-10-04
 - Safety: Explorer's Winlogon Shell value is always restored (finally); desktop cleanup removes only shortcuts, never on a OneDrive-redirected desktop, and now also cleans the Public Desktop; `C:\Install` is no longer writable by all users

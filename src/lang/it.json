@@ -74,6 +74,7 @@
   "warn.helpdesk": "Download di Netixx Helpdesk non riuscito: {0}",
   "warn.debloat": "Pulizia di Windows non riuscita: {0}",
   "warn.branding": "Impossibile riapplicare il branding OEM: {0}",
+  "warn.oneDrive": "Impossibile disinstallare OneDrive ({0})",
   "warn.layoutMissing": "File di layout del desktop mancante: {0}",
   "warn.explorer": "Impossibile riavviare Esplora file: {0}",
   "warn.timeSync": "Sincronizzazione dell'ora non riuscita: {0}",

@@ -74,6 +74,7 @@
   "warn.helpdesk": "Netixx Helpdesk download failed: {0}",
   "warn.debloat": "Windows cleanup failed: {0}",
   "warn.branding": "OEM branding could not be re-applied: {0}",
+  "warn.oneDrive": "OneDrive could not be uninstalled ({0})",
   "warn.layoutMissing": "Desktop layout file not found: {0}",
   "warn.explorer": "Explorer restart failed: {0}",
   "warn.timeSync": "System time synchronization failed: {0}",

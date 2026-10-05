@@ -77,11 +77,33 @@ function Remove-Win32Bloat {
     if ($entries.Count -eq 0) { Write-Log "  No Win32 OEM promo software found" }
 }
 
+# OneDrive is removed on every profile (Netixx decision, 2026-10). "OneDriveSetup.exe /uninstall"
+# (per-machine: "/uninstall /allusers") is silent; its uninstall entry just has no
+# QuietUninstallString. Accounts created later would get OneDrive back through the Default
+# profile's Run value "OneDriveSetup" - user_settings.reg deletes it there.
+function Remove-OneDrive {
+    $entries = @(Get-ItemProperty -ErrorAction SilentlyContinue -Path @(
+        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\OneDriveSetup.exe'
+        'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\OneDriveSetup.exe'
+        'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\OneDriveSetup.exe'
+    ))
+    if ($entries.Count -eq 0) { Write-Log "  OneDrive is not installed"; return }
+
+    Get-Process -Name OneDrive -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    foreach ($entry in $entries) {
+        $result = Invoke-SilentUninstall -Entry $entry -TimeoutMinutes 10 -UninstallStringIsSilent
+        if ($result -in 'removed', 'reboot') {
+            Write-Log "  OneDrive $($entry.DisplayVersion) removed" -Level Success
+        } else {
+            Write-Log "OneDrive could not be removed ($result)" -Level Warning -Key warn.oneDrive -KeyArgs $result
+        }
+    }
+}
+
 # Apps kept intentionally - too useful or disruptive to remove in enterprise
 $excluded = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 @(
     'Microsoft.WindowsStore'
-    'Microsoft.OneDrive'
     'Microsoft.Edge'
     'Microsoft.Edge XPFFTQ037JWMHS'
     'XPFFTQ037JWMHS'
@@ -333,4 +355,5 @@ if (-not $appxToRemove) {
 $appxToRemove = @($appxToRemove | Where-Object { -not $excluded.Contains($_) })
 Remove-UWPApp -AppxPackages $appxToRemove
 Remove-Win32Bloat
+Remove-OneDrive
 Import-TelemetryRegistry
