@@ -5,7 +5,8 @@
 .DESCRIPTION
     1. Sets src\version.txt, turns README's "### Unreleased" into "### vX.Y.Z - <date>" and
        updates the version shown in DESIGN.md / .impeccable\design.json.
-    2. Runs tests\Test-Repository.ps1 and build.ps1 - stops on any failure.
+    2. Runs tests\Test-Repository.ps1, renders the screenshots (docs\screenshots, so the menu
+       shows the new version) and runs build.ps1 - stops on any failure.
     3. Commits everything (including gk-script.exe), pushes master, and publishes a GitHub
        Release with the changelog entry as notes and gk-script.exe attached (marked Latest).
     Needs git, NSIS and the GitHub CLI (gh, signed in).
@@ -73,6 +74,13 @@ Write-Host "Version $previous -> $Version, changelog dated" -ForegroundColor Cya
 # --- Checks and build
 & "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'tests\Test-Repository.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'Repository checks failed - nothing committed (version files are already updated).' }
+# Screenshots with the new version number (WPF needs an STA thread)
+$screenshots = Join-Path $PSScriptRoot 'docs\screenshots\Make-Screenshots.ps1'
+if (Test-Path $screenshots) {
+    Write-Host 'Rendering screenshots...' -ForegroundColor Cyan
+    & "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -STA -ExecutionPolicy Bypass -File $screenshots | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Rendering the screenshots failed - nothing committed (version files are already updated).' }
+}
 & (Join-Path $PSScriptRoot 'build.ps1')
 
 # --- Commit, push, GitHub Release

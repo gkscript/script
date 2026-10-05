@@ -25,6 +25,8 @@ foreach ($file in $scripts) {
         $_.Kind -in 'StringLiteral', 'StringExpandable', 'HereStringLiteral', 'HereStringExpandable' -and $_.Text -match '[^\x00-\x7F]'
     })
     if ($bad.Count) { Fail "$name has non-ASCII characters in a string (line $($bad[0].Extent.StartLineNumber))" }
+    # Control characters (e.g. a "\v" turned into a vertical tab by an editing tool) break paths silently
+    if ([System.IO.File]::ReadAllText($file.FullName) -match '[\x00-\x08\x0B\x0C\x0E-\x1F]') { Fail "$name contains a control character" }
     $bytes = [System.IO.File]::ReadAllBytes($file.FullName)
     if ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) { Fail "$name has a UTF-8 BOM" }
     $null = $allCode.AppendLine([System.IO.File]::ReadAllText($file.FullName))

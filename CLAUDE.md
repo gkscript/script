@@ -26,7 +26,7 @@ A release is one command, once README has a `### Unreleased` section with the ch
 powershell -ExecutionPolicy Bypass -File release.ps1 -Version 2.2.0 -Summary "short description"
 ```
 
-`release.ps1` sets `src/version.txt`, dates the changelog entry (`### vX.Y.Z — YYYY-MM-DD`) and the version shown in DESIGN.md / `.impeccable/design.json`, runs the checks and the build (stops on failure), commits everything including `gk-script.exe`, pushes `master`, and publishes the GitHub Release with the changelog entry and the exe (full commit SHA as target - `gh` rejects a short one). `-NoPublish` stops after the local commit. It refuses untracked files and an existing tag.
+`release.ps1` sets `src/version.txt`, dates the changelog entry (`### vX.Y.Z — YYYY-MM-DD`) and the version shown in DESIGN.md / `.impeccable/design.json`, runs the checks, renders the screenshots in `docs/screenshots` (so they show the new version) and the build (stops on failure), commits everything including `gk-script.exe`, pushes `master`, and publishes the GitHub Release with the changelog entry and the exe (full commit SHA as target - `gh` rejects a short one). `-NoPublish` stops after the local commit. It refuses untracked files and an existing tag.
 
 The repo is public. `https://github.com/gkscript/script/releases/latest/download/gk-script.exe` always serves the newest exe.
 
