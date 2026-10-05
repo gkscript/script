@@ -20,6 +20,13 @@ Optional: `-OutputFile <path>` (default `gk-script.exe` in repo root), `-Makensi
 
 `gk-script.exe` appears in `.gitignore`, but it is tracked anyway, and releases commit the rebuilt exe. The version string lives in `src/version.txt` and is logged at startup.
 
+A release is:
+1. Bump `src/version.txt`, date the README changelog entry (`### vX.Y.Z — YYYY-MM-DD`), and update the version shown in DESIGN.md / `.impeccable/design.json`.
+2. Build, then commit including `gk-script.exe`, and push to `master`.
+3. Publish a GitHub Release: `gh release create vX.Y.Z gk-script.exe --repo gkscript/script --target <full commit SHA> --title vX.Y.Z --notes-file <changelog entry> --latest`. Pass the full SHA, because a short one is rejected.
+
+The repo is public. `https://github.com/gkscript/script/releases/latest/download/gk-script.exe` always serves the newest exe.
+
 ## Running
 
 From the repository root (admin required):
