@@ -118,6 +118,7 @@ table { border-collapse: collapse; width: 100%; }
 th, td { text-align: left; vertical-align: top; padding: 6px 12px 6px 0; border-bottom: 1px solid #E5E5E5; font-size: 14px; }
 th { width: 240px; font-weight: 400; color: #5C5C5C; }
 ul { margin: 4px 0; padding-left: 20px; font-size: 14px; }
+main p { margin: 4px 0; font-size: 14px; color: #5C5C5C; }
 li { margin: 3px 0; }
 ul.attention li { color: #9D5D00; }
 footer { padding: 0 40px 32px; font-size: 12px; color: #5C5C5C; }

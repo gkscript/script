@@ -14,6 +14,18 @@ Download the latest `gk-script.exe` from [Releases](https://github.com/gkscript/
 
 The menu opens in German. Switch to English or Italian with **DE · EN · IT** in the top-right corner; the result window follows that choice.
 
+## Screenshots
+
+| Menu | Done |
+|---|---|
+| ![Menu: profiles, Office, run options](docs/screenshots/menu.png) | ![Result window: setup finished](docs/screenshots/result-success.png) |
+| **Finished with warnings** | **PC already in use** |
+| ![Result window with warnings and restart](docs/screenshots/result-warning.png) | ![Question before a full setup on a PC in use](docs/screenshots/question-used-pc.png) |
+| **Office: pick the customer's licence** | **Handover report** |
+| ![Office product choice](docs/screenshots/office-choice.png) | ![Handover report (HTML)](docs/screenshots/report.png) |
+
+Demo data. The windows follow the menu language (DE/EN/IT); `docs/screenshots/Make-Screenshots.ps1` renders them again after UI changes.
+
 ## Profiles
 
 | | Profile | Packages |
@@ -153,6 +165,10 @@ src/
 - **Texts / translations**: edit `src/lang/de.json`, `en.json`, `it.json` (same keys in all three)
 
 ## Changelog
+
+### Unreleased
+- Screenshots in the README and on the release pages
+- Report: "none" in the same size as the lists
 
 ### v2.2.0 — 2026-10-05
 - Handover report `C:\Install\Einrichtungsprotokoll.html` (device, serial number, Windows, apps with versions, updates, warnings), opened from the result window

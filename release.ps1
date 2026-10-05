@@ -90,6 +90,13 @@ if ($NoPublish) { Write-Host 'Not published (-NoPublish).'; return }
 $null = Invoke-Git push origin master
 $notesFile = Join-Path $env:TEMP "gk-release-notes-$Version.md"
 $notes = "$changes`n`n**Download:** ``gk-script.exe`` below. Copy it to the new PC and run it (admin rights required).`n"
+# Screenshots from docs\screenshots at this release's tag (Make-Screenshots.ps1 renders them)
+$remoteForImages = (Invoke-Git remote get-url origin) -replace '\.git$', '' -replace '^https://github\.com/', ''
+$shots = @('menu', 'result-success', 'office-choice', 'report') | Where-Object { Test-Path (Join-Path $PSScriptRoot "docs\screenshots\$_.png") }
+if ($shots) {
+    $images = $shots | ForEach-Object { "<img src=`"https://raw.githubusercontent.com/$remoteForImages/$tag/docs/screenshots/$_.png`" width=`"49%`" alt=`"$_`">" }
+    $notes += "`n### Screenshots`n`n$($images -join ' ')`n"
+}
 [System.IO.File]::WriteAllText($notesFile, $notes, $utf8)
 $remote = (Invoke-Git remote get-url origin) -replace '\.git$', '' -replace '^https://github\.com/', ''
 & $gh release create $tag (Join-Path $PSScriptRoot 'gk-script.exe') --repo $remote --target $sha --title $tag --notes-file $notesFile --latest
