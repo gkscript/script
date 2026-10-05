@@ -111,6 +111,8 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         <!-- Actions -->
         <StackPanel x:Name="ActionsPanel" Orientation="Horizontal" HorizontalAlignment="Right" Margin="32,22,32,26">
             <!-- Texts are set from src/lang by Show-SetupResult; -Choices replaces these buttons -->
+            <Button x:Name="OpenReportButton" Style="{StaticResource ActionButton}"
+                    Visibility="Collapsed" AutomationProperties.AutomationId="OpenReport"/>
             <Button x:Name="OpenLogButton" Style="{StaticResource ActionButton}"
                     AutomationProperties.AutomationId="OpenLog"/>
             <Button x:Name="RestartButton" Style="{StaticResource AccentButton}"

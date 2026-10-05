@@ -116,6 +116,9 @@ Function Show-ScriptMenuGui {
         UpdatesEnabled = $true
         # "Only install, remove nothing" switch: off by default; on passes -InstallOnly via {mode}
         InstallOnly = $false
+        # Set when GitHub has a newer release (checked in the background, see below)
+        NewVersion = $null
+        DownloadUrl = $null
     }
     Set-UiLanguage $language
     $form.DataContext = Get-MenuDataContext
@@ -148,6 +151,40 @@ Function Show-ScriptMenuGui {
         Invoke-ButtonAction $control.Tag
         $form.Close()
     })
+
+    # The update hint's link opens the download in the browser
+    $form.AddHandler([System.Windows.Documents.Hyperlink]::RequestNavigateEvent, [System.Windows.Navigation.RequestNavigateEventHandler]{
+        param($origin, $navigate)
+        Start-Process $navigate.Uri.AbsoluteUri
+        $navigate.Handled = $true
+    })
+
+    # Newer release on GitHub? Asked in the background so the menu opens at once; offline or
+    # slow just means no hint. A technician with an old exe on a USB stick sees it here.
+    $releaseConfig = $null
+    try { $releaseConfig = (Get-Content (Join-Path (Split-Path $csvPath -Parent) 'config.json') -Raw | ConvertFrom-Json).release } catch { }
+    if ($releaseConfig.latestApi -and $version) {
+        $releaseCheck = [powershell]::Create().AddScript({
+            param($url)
+            try { (Invoke-RestMethod -Uri $url -UseBasicParsing -TimeoutSec 8 -Headers @{ 'User-Agent' = 'gk-script' }).tag_name } catch { $null }
+        }).AddArgument($releaseConfig.latestApi)
+        $releasePending = $releaseCheck.BeginInvoke()
+        $releasePoll = New-Object System.Windows.Threading.DispatcherTimer
+        $releasePoll.Interval = [TimeSpan]::FromMilliseconds(500)
+        $releasePoll.Add_Tick({
+            if (-not $releasePending.IsCompleted) { return }
+            $releasePoll.Stop()
+            $latestTag = @($releaseCheck.EndInvoke($releasePending))[0]
+            $releaseCheck.Dispose()
+            $latest = $null
+            if ($latestTag -and [version]::TryParse(($latestTag -replace '^v'), [ref]$latest) -and $latest -gt [version]$version) {
+                $script:menuState.NewVersion = $latest.ToString()
+                $script:menuState.DownloadUrl = $releaseConfig.downloadUrl
+                $form.DataContext = Get-MenuDataContext
+            }
+        })
+        $releasePoll.Start()
+    }
 
     if ($hideConsole) {
         if ($global:error[0].Exception.CommandInvocation.MyCommand.ModuleName -ne 'PSScriptMenuGui') {

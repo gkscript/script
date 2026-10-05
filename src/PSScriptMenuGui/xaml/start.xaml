@@ -30,6 +30,13 @@
                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
                     <TextBlock Style="{StaticResource BandTitle}" Text="Netixx Grundkonfiguration"/>
                     <TextBlock Style="{StaticResource BandSubtitle}" Foreground="#DCE6FF" Text="{Binding Subtitle}"/>
+                    <!-- A newer release exists on GitHub (set in the background); the link downloads it -->
+                    <TextBlock Visibility="{Binding UpdateVisibility}" Margin="0,6,0,0" FontSize="13" FontWeight="SemiBold">
+                        <Hyperlink NavigateUri="{Binding DownloadUrl}" Foreground="#FFFFFF"
+                                   AutomationProperties.AutomationId="UpdateLink">
+                            <Run Text="{Binding UpdateText}"/>
+                        </Hyperlink>
+                    </TextBlock>
                 </StackPanel>
                 <!-- Language: quiet chips in the band's top-right corner (Tag = language code).
                      Codes are language-neutral, so they stay the same in every language. -->

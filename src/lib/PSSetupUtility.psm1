@@ -312,7 +312,10 @@ Function Show-SetupResult {
 
         [hashtable[]]$Choices = @(),
 
-        [string]$Heading
+        [string]$Heading,
+
+        # Handover report (HTML) - adds an "Open report" button
+        [string]$ReportFile
     )
 
     # Per status: band, headline, subline, item glyph color; solid glyphs from Segoe Fluent
@@ -407,6 +410,12 @@ Function Show-SetupResult {
         }
 
         (& $find 'OpenLogButton').Add_Click({ Start-Process notepad.exe -ArgumentList "`"$LogFile`"" })
+        if ($ReportFile -and (Test-Path -LiteralPath $ReportFile)) {
+            $reportButton = & $find 'OpenReportButton'
+            $reportButton.Content = Get-UiText result.button.openReport
+            $reportButton.Visibility = 'Visible'
+            $reportButton.Add_Click({ Start-Process -FilePath $ReportFile })
+        }
         $restartButton.Add_Click({ $script:ResultRestart = $true; $window.Close() })
         $closeButton.Add_Click({ $window.Close() })
 

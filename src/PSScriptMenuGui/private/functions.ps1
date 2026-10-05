@@ -98,6 +98,9 @@ Function Get-MenuDataContext {
         UpdatesLabel = Get-UiText menu.updates
         UpdatesHint = Get-UiText menu.updatesHint
         InstallOnly = [bool]$state.InstallOnly
+        UpdateText = if ($state.NewVersion) { Get-UiText menu.updateAvailable $state.NewVersion } else { '' }
+        UpdateVisibility = if ($state.NewVersion) { 'Visible' } else { 'Collapsed' }
+        DownloadUrl = $state.DownloadUrl
         InstallOnlyLabel = Get-UiText menu.installOnly
         InstallOnlyHint = Get-UiText menu.installOnlyHint
         IconPath = $state.IconPath

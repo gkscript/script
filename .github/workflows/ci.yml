@@ -1,0 +1,33 @@
+# Every push and pull request: the static checks in Windows PowerShell 5.1 (what the target PCs
+# run), then a test build of gk-script.exe, kept as a downloadable artifact.
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check-and-build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Repository checks (Windows PowerShell 5.1)
+        shell: powershell
+        run: .\tests\Test-Repository.ps1
+
+      - name: Install NSIS
+        shell: powershell
+        run: choco install nsis -y --no-progress
+
+      - name: Build gk-script.exe
+        shell: powershell
+        run: .\build.ps1 -OutputFile "$env:RUNNER_TEMP\gk-script.exe"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gk-script-${{ github.sha }}
+          path: ${{ runner.temp }}\gk-script.exe
+          retention-days: 14

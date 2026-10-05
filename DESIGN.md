@@ -167,7 +167,7 @@ A disciplined palette: one brand blue in two strengths, three status signals, an
 
 ### Hierarchy
 - **Display** (600, 32px): the band headline, one per window ("Netixx Grundkonfiguration", "Setup complete", "Finished with 3 warnings").
-- **Subline** (400, 14px): the single line under the headline (profile, machine, duration; or "Choose a setup profile · v2.1.1").
+- **Subline** (400, 14px): the single line under the headline (profile, machine, duration; or "Choose a setup profile · v2.2.0").
 - **Title** (600, 15px): the profile name in a profile row.
 - **Heading** (600, 14px): the one section heading below the band ("Needs attention", "What went wrong").
 - **Body** (400, 13px, 19px line height): list items, button labels, the restart line.
@@ -239,6 +239,12 @@ Quiet DE · EN · IT selector in the top-right corner of the menu band, sitting 
 - **Hover:** 10% white fill.
 - **Focus:** white 1 px stroke plus the white `BandFocusRing`, because an ink ring would disappear on blue.
 - **Labels and names:** the labels are language codes and never get translated. The screen-reader names use each language's own name (Deutsch, English, Italiano).
+
+### Update hint (menu)
+When GitHub has a newer release, one line appears under the band's subline: 13 px semibold, white, underlined - a plain hyperlink ("Neue Version 2.2.0 verfügbar - hier herunterladen") that opens the download. No badge, no color: the band already carries the brand; the link is quiet until it is needed.
+
+### Handover report (HTML)
+`C:\Install\Einrichtungsprotokoll.html` follows the window system on paper: a Netixx-blue band with the 28 px Display headline and a `#DCE6FF` subline, then label/value tables (labels Graphite, 1 px `#E5E5E5` rules), section headings in Netixx blue, items needing attention in the warning text color `#9D5D00`. Prints with the band (print-color-adjust).
 
 ### Question (result window)
 The result window doubles as the one question the tool asks: before a full run on a PC that looks used. Warning band, the signs listed under a plain heading, and three buttons in place of Open log / Close: the safe choice ("Nur nachinstallieren") is the accent button and the default; "Abbrechen" is Esc. No log row.

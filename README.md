@@ -50,13 +50,16 @@ All profiles include: all Windows updates (switchable in the menu), Office 365 u
 12. Health checks: activation, Defender, edition vs. profile
 13. Clean up: update leftovers (DISM), Chocolatey, temp files, recycle bin; setup files removed at the next start; restore point
 14. Restart Explorer, so the new settings show without signing out
-15. Show the result window: green done / yellow warnings / red failed, warnings listed, restart button when needed, reminder to confirm default apps for the current account
+15. Write the handover report (`C:\Install\Einrichtungsprotokoll.html`: device, serial number, Windows, apps with versions, updates, warnings) and, when a restart is pending, set up the update follow-up
+16. Show the result window: green done / yellow warnings / red failed, warnings listed, Open report, restart button when needed, reminder to confirm default apps for the current account
+
+After the restart, sign in with the same account: the **update follow-up** installs the updates that only appear after the restart (always after a feature update), updates apps and adds them to the report - up to three rounds.
 
 The PC and display are kept awake for the whole run, so the result is on screen when you come back.
 
 ## Logs
 
-Setup runs log to `C:\Logs\PSScriptSetup\setup_YYYYMMDD_HHmmss.log`, Office installs to `office_YYYYMMDD_HHmmss.log` in the same folder.
+Setup runs log to `C:\Logs\PSScriptSetup\setup_YYYYMMDD_HHmmss.log`; Office installs to `office_*.log` and the update follow-up to `update_*.log` in the same folder.
 
 ```powershell
 # Open the latest log
@@ -74,6 +77,14 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 ```
 
 Output: `gk-script.exe` in the repo root.
+
+```powershell
+# Static checks (also run by GitHub Actions on every push)
+powershell -ExecutionPolicy Bypass -File tests\Test-Repository.ps1
+
+# Release: version, changelog date, checks, build, commit, push, GitHub Release
+powershell -ExecutionPolicy Bypass -File release.ps1 -Version 2.2.0 -Summary "short description"
+```
 
 ## Run without building
 
@@ -104,8 +115,13 @@ powershell -ExecutionPolicy Bypass -File src\office.ps1 -Product m365business   
 gk-script.exe           ← self-contained deployment exe
 launch.bat              → UAC elevation → PowerShell GUI
 build.ps1               → builds gk-script.exe via NSIS
+release.ps1             → one-command release (checks, build, commit, push, GitHub Release)
+tests/Test-Repository.ps1 → static checks (PS 5.1 parsing, encodings, translations, config)
+.github/workflows/ci.yml  → runs the checks and a test build on every push
 src/
-├── main.ps1            → setup run (profiles, full / install only)
+├── main.ps1            → setup run (profiles, full / install only): start-up and step sequence
+├── steps/              → the step functions (packages, updates, settings, desktop, checks, report, ...)
+├── postupdate.ps1      → update follow-up after the restart (copied to C:\Install\gk-script)
 ├── office.ps1          → Microsoft Office installation (own menu item)
 ├── config.json         → deployment profiles, package catalog (winget/Chocolatey IDs), paths
 ├── gui.csv             → WPF menu button definitions
@@ -129,6 +145,7 @@ src/
 - **Bloat exclusions / OEM keep-list**: edit `$excluded` in `src/debloat.ps1`; extra removals in `$oemAndExtras` / `$win32Bloat`
 - **Desktop icons to keep**: edit `src/whitelist.txt`
 - **Taskbar pins**: `windows.taskbarPins` in `src/config.json` (Start-menu shortcut names)
+- **Maker BIOS/firmware tool** (Dell, HP business): `"oemFirmware": true` per profile in `src/config.json` (default: business only)
 - **Office products**: `office` in `src/config.json` — product IDs, OneDrive per product, excluded apps, proofing languages
 - **OEM branding**: edit `src/Logo_Info.reg` (Windows 11 shows the support texts; it no longer displays an OEM logo)
 - **Menu buttons**: edit `src/gui.csv` (`Icon` = Segoe Fluent Icons code, e.g. `E821`)
@@ -136,6 +153,17 @@ src/
 - **Texts / translations**: edit `src/lang/de.json`, `en.json`, `it.json` (same keys in all three)
 
 ## Changelog
+
+### v2.2.0 — 2026-10-05
+- Handover report `C:\Install\Einrichtungsprotokoll.html` (device, serial number, Windows, apps with versions, updates, warnings), opened from the result window
+- Update follow-up: after the restart, signing in with the same account installs the updates that only appear then (up to three rounds) and adds them to the report
+- The menu shows when a newer version is available on GitHub, with a download link
+- Business profile on Dell and HP business models: BIOS, firmware and drivers from the maker's own tool (Dell Command Update, HP Image Assistant) in the update follow-up; the tool is removed afterwards
+- Windows no longer turns device encryption back on by itself after BitLocker was switched off (full setup)
+- Windows Update waits and retries while it is busy or the network isn't up yet
+- Checks on every push (GitHub Actions, Windows PowerShell 5.1) and a one-command release script
+- Repository history cleaned of old binaries (289 MB to 35 MB) - existing clones need a fresh clone
+- `main.ps1` split into `src/steps/` (no behaviour change)
 
 ### v2.1.1 — 2026-10-05
 - Cleanup: no desktop icon layout any more (the captured layout files were stale), so the end of the run no longer blanks the Winlogon shell - Explorer is simply restarted

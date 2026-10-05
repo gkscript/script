@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **gk-script** ("Netixx Grundkonfiguration") is a Windows 11 deployment tool for Netixx IT Solutions. It automates first-time PC setup: package installation, GPU drivers, Office 365 removal, OEM branding, registry customization and bloat removal, across three deployment profiles. It ships as a single NSIS-built `.exe` that opens a WPF button menu.
 
-There is no test suite or linter. Changes can only be verified by running a profile on a real (or VM) Windows machine as admin, then checking the log.
+`tests/Test-Repository.ps1` runs the static checks that caught real bugs: every script parses in Windows PowerShell 5.1, no non-ASCII inside strings, no BOM, XAML well-formed, the three language files have the same keys and every key the code uses exists, config/gui.csv consistent, .reg files UTF-16 LE or ASCII. GitHub Actions (`.github/workflows/ci.yml`) runs it on every push in Windows PowerShell 5.1 and builds a test exe (artifact). Behaviour itself can only be verified by running on a real or VM Windows machine as admin, then checking the log.
 
 ## Build
 
@@ -20,10 +20,13 @@ Optional: `-OutputFile <path>` (default `gk-script.exe` in repo root), `-Makensi
 
 `gk-script.exe` appears in `.gitignore`, but it is tracked anyway, and releases commit the rebuilt exe. The version string lives in `src/version.txt` and is logged at startup.
 
-A release is:
-1. Bump `src/version.txt`, date the README changelog entry (`### vX.Y.Z — YYYY-MM-DD`), and update the version shown in DESIGN.md / `.impeccable/design.json`.
-2. Build, then commit including `gk-script.exe`, and push to `master`.
-3. Publish a GitHub Release: `gh release create vX.Y.Z gk-script.exe --repo gkscript/script --target <full commit SHA> --title vX.Y.Z --notes-file <changelog entry> --latest`. Pass the full SHA, because a short one is rejected.
+A release is one command, once README has a `### Unreleased` section with the changes:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File release.ps1 -Version 2.2.0 -Summary "short description"
+```
+
+`release.ps1` sets `src/version.txt`, dates the changelog entry (`### vX.Y.Z — YYYY-MM-DD`) and the version shown in DESIGN.md / `.impeccable/design.json`, runs the checks and the build (stops on failure), commits everything including `gk-script.exe`, pushes `master`, and publishes the GitHub Release with the changelog entry and the exe (full commit SHA as target - `gh` rejects a short one). `-NoPublish` stops after the local commit. It refuses untracked files and an existing tag.
 
 The repo is public. `https://github.com/gkscript/script/releases/latest/download/gk-script.exe` always serves the newest exe.
 
@@ -69,7 +72,10 @@ gk-script.exe (NSIS) → launch.bat → PSScriptMenuGui (reads src/gui.csv) → 
   - `New-OfficeConfiguration` writes the XML: 64-bit, Current Channel, `MatchOS` language, proofing tools for the other `proofingLanguages`, `excludeApps` (+ OneDrive for products with `oneDrive: false`), classic and new Outlook, RemoveMSI, silent. Success = the product is in `ProductReleaseIds` and `WINWORD.EXE` exists. It logs to `office_*.log`, which the used-PC check ignores.
 - **`src/lib/Office.ps1`** (dot-sourced by the module): `Get-OfficeProductIds`, `Get-OfficeSetup`, `New-OfficeConfiguration`, `Uninstall-Microsoft365` (shared with `main.ps1` Step 9).
 - **`src/lib/PSSetupUtility.psm1`**: `Write-Log`, `Initialize-Logging` (`-Name` = log prefix), `Restart-In64BitPowerShell`, `Test-Prerequisite*`, `Sync-SystemTimeWithInternet`, `Get-SystemGPU`, `Get-BitlockerStatus`, `Invoke-NativeCommand`, `Invoke-SilentUninstall`, `Get-UninstallEntries`, `Get-LogIssues`, `Set-KeepAwake`, `Show-SetupResult` and the language functions. `debloat.ps1` runs in the same session, so these are available there too.
-- **Result window**: `Show-SetupResult` loads `src/lib/SetupResult.xaml`, a WPF window with Success, Warning and Failed states. It replaces every MessageBox in the run.
+- **`src/steps/*.ps1`** hold `main.ps1`'s step functions (Packages, Updates, Antivirus, Settings, Desktop, Checks, Cleanup, Report). `main.ps1` dot-sources them into its own scope - they are not a module - so they read `$script:config`, `$SkipUpdates`, `$InstallOnly` and the other run state directly. `main.ps1` itself is only parameters, start-up, pre-flight and the step sequence.
+- **`src/postupdate.ps1`**: the update follow-up after the end-of-run restart (see Final).
+- **Menu update hint**: the menu asks `config.release.latestApi` (GitHub's latest release) in a background runspace and, if it is newer than `version.txt`, shows a link to `config.release.downloadUrl` under the subline.
+- **Result window**: `Show-SetupResult` loads `src/lib/SetupResult.xaml`, a WPF window with Success, Warning and Failed states. It replaces every MessageBox in the run. `-ReportFile` adds an "Open report" button.
   - The status color fills the band, the title bar (DWM caption color) and the taskbar button (`TaskbarItemInfo`), so the outcome reads from across the room.
   - `-Notes` shows steps left to the technician, with an info icon and no effect on the band color. Today that is the reminder to confirm default apps for the current account.
   - `-Choices` turns the window into a question: the given buttons replace Open log / Restart / Close, and the clicked choice's `Key` is returned (the MessageBox fallback maps them to Yes/No/Cancel). `-Heading` replaces the heading above the items. Used for the used-PC question. Choices with a `Description` render as menu-style rows (title, caption, chevron) instead of buttons; `-Status Question` gives the menu's Netixx-blue band (office.ps1's product choice).
@@ -116,7 +122,7 @@ The step numbers below match the `Write-Log "Step N"` messages in the code.
 - **5. Shortcuts and desktop.** Shortcuts from `config.windows.shortcuts` are deleted. Chrome and Firefox are not on the whitelist: they go to the taskbar (Step 11). If `Test-TaskbarPinSupport` says this Windows can't pin them (below 24H2 build 26100.4484 and `-SkipUpdates`), `config.windows.taskbarPins` are kept on the desktop instead.
   - `Clear-DesktopIcons` removes only `.lnk`/`.url` files that aren't in `whitelist.txt` (wildcards allowed), never recursively.
   - It cleans the Public Desktop, and the user's desktop **only while it is the local folder**. A OneDrive-redirected desktop holds the customer's synced files.
-- **6. BitLocker.** Disabled on C: if encrypted. This is a deliberate Netixx decision.
+- **6. BitLocker.** Disabled on C: if encrypted. This is a deliberate Netixx decision. The full run also sets `HKLM\SYSTEM\CurrentControlSet\Control\BitLocker\PreventDeviceEncryption=1` (Microsoft Learn, BitLocker for OEMs), because Windows 11 24H2+ turns device encryption on by itself on more PCs, e.g. once a Microsoft account signs in; turning BitLocker on by hand stays possible. Install only touches neither.
 - **7. Install folder and Helpdesk.** `C:\Install` is created and restricted (`Protect-InstallFolder`: Administrators/SYSTEM full, Users read/execute).
   - If branded, the **Netixx Helpdesk** is downloaded at runtime. A POST to `https://www.898.tv/api/CustomDesign` returns a signed Azure Blob URL.
   - The Helpdesk is linked on the Public Desktop only if its Authenticode signer is `CN=TeamViewer ...`. Otherwise it is deleted.
@@ -148,7 +154,11 @@ The step numbers below match the `Write-Log "Step N"` messages in the code.
   - `Invoke-FinalCleanup` clears the Windows and user temp folders (never the running setup folder), the recycle bin and the Delivery Optimization cache.
   - `Register-SetupFolderCleanup` sets up a one-shot SYSTEM task that deletes `%TEMP%\NetixxSetup` at the next start. It applies only when running from the exe extract.
   - `New-SetupRestorePoint` turns on System Protection and creates a restore point.
-- **Final.** `Restart-Explorer` (see below), then `Test-PendingReboot`, then the result window. The result window must come last, because a modal window would hold back the Explorer restart.
+- **Final.** `Restart-Explorer` (see below), then `Test-PendingReboot`, then:
+  - **BIOS/firmware from the maker's tool** (profiles with `"oemFirmware": true`, default: business; full run with updates): `Invoke-OemFirmwareUpdate` (`steps/Firmware.ps1`) runs Dell Command Update (`dcu-cli /applyUpdates -silent -reboot=disable -updateType=bios,firmware,driver -autoSuspendBitLocker=disable`) or HP Image Assistant (`/Operation:Analyze /Action:Install /Category:BIOS,Drivers,Firmware /Selection:All /Silent`) and removes the tool again. Only Dell and HP business models have a supported silent CLI; consumer lines and other makers get firmware from Windows Update (Step 3b installs UEFI capsules as driver updates). It runs in the update follow-up, where BitLocker is off and no restart is pending (both make the tools skip the BIOS or refuse); without a pending restart, right away. On battery the BIOS category is dropped (a flash needs mains power). Exit codes from Dell's DCU reference and HP's HPIA guide; "model not supported" (Dell 7, HP 4096) is informational.
+  - **Update follow-up** (updates on and a restart pending): `Register-UpdateFollowUp` copies `postupdate.ps1` with `lib/`, `lang/` and the Updates/Packages/Report step files to `C:\Install\gk-script` (the `%TEMP%` setup folder is deleted at the next start) and registers `\Netixx\Update-Nachlauf`: at this account's next sign-in, one minute delay, elevated, visible; it expires after 7 days and deletes itself. It refuses a signed-in account that isn't an administrator (RunLevel Highest would give it a standard token). `postupdate.ps1` waits up to 5 minutes for the network (Wi-Fi connects after sign-in) and `Install-WindowsUpdates` retries for up to 15 minutes while Windows Update is busy or offline (0x80240009, 0x80240016, 0x80242014, 0x8024402C, 0x8024001F, 0x80246005). `postupdate.ps1` removes its task first, installs the updates that only appear after the restart, updates apps, appends to the report and shows the result window; if that restart brings more updates it registers the next pass (at most 3), and the last pass deletes its copy. Logs `update_*.log`.
+  - **Handover report** `C:\Install\<report.title>.html` (`New-SetupReport`): device and serial number, Windows and activation, profile/mode/duration/technician, apps with their installed versions, installed updates, warnings, notes. It uses what the run collected (`$script:Health`, `$script:InstalledUpdates`).
+  - The result window comes last, because a modal window would hold back the Explorer restart.
   - Warnings make it yellow and are listed (`Get-LogIssues`). A pending reboot adds "Restart required" and **Restart now**. Nothing restarts automatically.
 
 Most steps catch their own errors and log a Warning so the run can continue. Only pre-flight failures and unexpected exceptions abort.
@@ -173,7 +183,7 @@ There is no desktop icon layout any more: the old `desktop.reg` files were captu
 
 `main.ps1` and the module have separate `$script:` scopes. `main.ps1` gets the log path from `Initialize-Logging`'s return value (`$script:LogFile = Initialize-Logging ...`).
 
-Logs go to `C:\Logs\PSScriptSetup\setup_YYYYMMDD_HHmmss.log` (from `config.logging.logPath`). In `main.ps1` and the module, use `Write-Log -Level Info|Success|Warning|Error`. It writes color-coded output to the console and a timestamped line to the file.
+Logs go to `C:\Logs\PSScriptSetup\setup_YYYYMMDD_HHmmss.log` (from `config.logging.logPath`); `office.ps1` writes `office_*.log` and `postupdate.ps1` `update_*.log` there (`Initialize-Logging -Name`), which the used-PC check ignores. In `main.ps1` and the module, use `Write-Log -Level Info|Success|Warning|Error`. It writes color-coded output to the console and a timestamped line to the file.
 
 ## Important Patterns
 

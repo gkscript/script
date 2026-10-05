@@ -6,7 +6,8 @@
     "business": {
       "name": "Business",
       "packages": ["vlc", "firefox", "googlechrome", "7zip", "adobereader", "powertoys"],
-      "branded": true
+      "branded": true,
+      "oemFirmware": true
     },
     "consumer": {
       "name": "Consumer",
@@ -60,6 +61,11 @@
     ],
     "excludeApps": ["Groove", "Lync", "Publisher"],
     "proofingLanguages": ["de-de", "it-it"]
+  },
+  "release": {
+    "_comment": "The menu compares src/version.txt with the latest GitHub release and links the download.",
+    "latestApi": "https://api.github.com/repos/gkscript/script/releases/latest",
+    "downloadUrl": "https://github.com/gkscript/script/releases/latest/download/gk-script.exe"
   },
   "validation": {
     "minDiskSpace": 5000000000
