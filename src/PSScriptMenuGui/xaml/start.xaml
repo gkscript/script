@@ -52,18 +52,34 @@
         <TextBlock DockPanel.Dock="Bottom" Style="{StaticResource Caption}" TextAlignment="Center"
                    Margin="32,10,32,22" Text="{Binding Footer}"/>
 
-        <!-- Updates switch: same surface as the profile rows; off passes -SkipUpdates -->
-        <Border DockPanel.Dock="Bottom" Margin="32,8,32,0" Padding="18,12,16,12"
+        <!-- Run options: one card, same surface as the profile rows; a hairline between the rows.
+             Tag = the menu state key the switch sets ({mode} / {updates} in gui.csv). -->
+        <Border DockPanel.Dock="Bottom" Margin="32,8,32,0" Padding="18,4,16,4"
                 CornerRadius="{StaticResource ControlCorner}" Background="{StaticResource ControlFill}"
                 BorderBrush="{StaticResource ControlStroke}" BorderThickness="1">
-            <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding UpdatesEnabled, Mode=OneWay}"
-                      AutomationProperties.Name="{Binding UpdatesLabel}" AutomationProperties.HelpText="{Binding UpdatesHint}"
-                      AutomationProperties.AutomationId="UpdatesSwitch">
-                <StackPanel>
-                    <TextBlock Text="{Binding UpdatesLabel}" FontSize="14" FontWeight="SemiBold"/>
-                    <TextBlock Text="{Binding UpdatesHint}" Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,2,0,0"/>
-                </StackPanel>
-            </CheckBox>
+            <StackPanel>
+                <!-- On passes -InstallOnly: only installs, removes nothing -->
+                <CheckBox Style="{StaticResource ToggleSwitch}" Tag="InstallOnly"
+                          IsChecked="{Binding InstallOnly, Mode=OneWay}"
+                          AutomationProperties.Name="{Binding InstallOnlyLabel}" AutomationProperties.HelpText="{Binding InstallOnlyHint}"
+                          AutomationProperties.AutomationId="InstallOnlySwitch">
+                    <StackPanel Margin="0,8">
+                        <TextBlock Text="{Binding InstallOnlyLabel}" FontSize="14" FontWeight="SemiBold"/>
+                        <TextBlock Text="{Binding InstallOnlyHint}" Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                    </StackPanel>
+                </CheckBox>
+                <Border Height="1" Background="{StaticResource ControlStroke}" Margin="0,0,-16,0"/>
+                <!-- Off passes -SkipUpdates -->
+                <CheckBox Style="{StaticResource ToggleSwitch}" Tag="UpdatesEnabled"
+                          IsChecked="{Binding UpdatesEnabled, Mode=OneWay}"
+                          AutomationProperties.Name="{Binding UpdatesLabel}" AutomationProperties.HelpText="{Binding UpdatesHint}"
+                          AutomationProperties.AutomationId="UpdatesSwitch">
+                    <StackPanel Margin="0,8">
+                        <TextBlock Text="{Binding UpdatesLabel}" FontSize="14" FontWeight="SemiBold"/>
+                        <TextBlock Text="{Binding UpdatesHint}" Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                    </StackPanel>
+                </CheckBox>
+            </StackPanel>
         </Border>
 
         <!-- Profiles -->

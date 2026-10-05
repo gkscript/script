@@ -167,7 +167,7 @@ A disciplined palette: one brand blue in two strengths, three status signals, an
 
 ### Hierarchy
 - **Display** (600, 32px): the band headline, one per window ("Netixx Grundkonfiguration", "Setup complete", "Finished with 3 warnings").
-- **Subline** (400, 14px): the single line under the headline (profile, machine, duration; or "Choose a setup profile · v2.0.1").
+- **Subline** (400, 14px): the single line under the headline (profile, machine, duration; or "Choose a setup profile · v2.1.0").
 - **Title** (600, 15px): the profile name in a profile row.
 - **Heading** (600, 14px): the one section heading below the band ("Needs attention", "What went wrong").
 - **Body** (400, 13px, 19px line height): list items, button labels, the restart line.
@@ -225,12 +225,12 @@ The colored top field of every window, and the system's signal.
 - **Reach:** DWM paints the title bar and window border in the band color, so the band starts at the window's top edge. Result windows also set a full green, amber or red taskbar button (`TaskbarItemInfo`).
 
 ### Toggle Switch
-The "install all updates" switch sits in the menu below the profile rows. The setting it controls is real: `-SkipUpdates` when off.
+The run options sit in one card below the profile rows, one switch per row with a 1 px `control-stroke` hairline between them: "install only (remove nothing)" (`-InstallOnly` when on, off by default) and "install all updates" (`-SkipUpdates` when off, on by default). The settings they control are real.
 - **Container:** the same surface as a profile row (`control-fill`, 1 px `control-stroke`, 6 px radius, 12 px × 16 px padding, 18 px on the left).
 - **Content:** the label (14px semibold) and a hint (Label, Graphite) on the left; the Windows 11 toggle shape (40 × 20, 10 px radius) on the right.
 - **States:** off is a grey outline with a grey thumb on the left; on is a `netixx-signal-blue` track with a white thumb on the right.
 - **Hover and focus:** hover darkens the outline, and keyboard focus gives an ink outline plus the focus ring.
-- The setting is on by default.
+- Defaults: install only off, updates on.
 
 ### Language Chips
 Quiet DE · EN · IT selector in the top-right corner of the menu band, sitting in the band's top padding. The chips are grouped radio buttons (`LanguageChip`), 12px, with 7 px × 2 px padding and a 4px radius.
@@ -239,6 +239,12 @@ Quiet DE · EN · IT selector in the top-right corner of the menu band, sitting 
 - **Hover:** 10% white fill.
 - **Focus:** white 1 px stroke plus the white `BandFocusRing`, because an ink ring would disappear on blue.
 - **Labels and names:** the labels are language codes and never get translated. The screen-reader names use each language's own name (Deutsch, English, Italiano).
+
+### Question (result window)
+The result window doubles as the one question the tool asks: before a full run on a PC that looks used. Warning band, the signs listed under a plain heading, and three buttons in place of Open log / Close: the safe choice ("Nur nachinstallieren") is the accent button and the default; "Abbrechen" is Esc. No log row.
+
+### Choice rows (result window)
+When a question offers longer choices (office.ps1's product choice), each choice is a row with the menu's profile-row anatomy: 15 px semibold title, Label caption, chevron, the full row clickable. The band is the menu's Netixx blue (`Question`), because a choice is not an outcome. "Abbrechen" stays an action button bottom right.
 
 ### Notes (result window)
 These are steps left to the technician that are not problems, such as confirming default apps for the current account.

@@ -118,6 +118,8 @@ Function Show-ScriptMenuGui {
         ButtonForegroundColor = $buttonForegroundColor
         # "Install all updates" switch: on by default; off passes -SkipUpdates via {updates}
         UpdatesEnabled = $true
+        # "Only install, remove nothing" switch: off by default; on passes -InstallOnly via {mode}
+        InstallOnly = $false
     }
     Set-UiLanguage $language
     $form.DataContext = Get-MenuDataContext
@@ -129,8 +131,8 @@ Function Show-ScriptMenuGui {
         $control = $routed.OriginalSource
 
         if ($control -is [System.Windows.Controls.CheckBox]) {
-            # Updates switch
-            $script:menuState.UpdatesEnabled = [bool]$control.IsChecked
+            # Run-option switch: Tag names the menu state key (UpdatesEnabled, InstallOnly)
+            $script:menuState[[string]$control.Tag] = [bool]$control.IsChecked
             return
         }
         if ($control -is [System.Windows.Controls.RadioButton]) {

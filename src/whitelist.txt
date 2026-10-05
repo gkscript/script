@@ -1,4 +1,2 @@
-Firefox.lnk
-Google Chrome.lnk
 Netixx Helpdesk
 LibreOffice*.lnk

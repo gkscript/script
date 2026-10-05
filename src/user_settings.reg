@@ -72,8 +72,3 @@ Windows Registry Editor Version 5.00
 [HKEY_CURRENT_USER\Console\%%Startup]
 "DelegationConsole"="{2EACA947-7F5F-4CFA-BA87-8F7FBEEFBE69}"
 "DelegationTerminal"="{E12CFF52-A866-4C77-9A90-F570A7AA2C6B}"
-
-; OneDrive is uninstalled (debloat.ps1). New accounts install it at first sign-in through the
-; Default profile's Run value "OneDriveSetup" (Microsoft Q&A); deleting it there stops that.
-[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run]
-"OneDriveSetup"=-

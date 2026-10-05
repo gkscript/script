@@ -12,12 +12,12 @@
     },
     "consumer": {
       "name": "Consumer",
-      "packages": ["vlc", "firefox", "googlechrome", "7zip", "adobereader", "libreoffice", "paint.net", "powertoys"],
+      "packages": ["vlc", "firefox", "googlechrome", "7zip", "adobereader", "libreoffice", "paint.net", "outlook", "powertoys"],
       "branded": true
     },
     "consumer-nolo": {
       "name": "Consumer (No LibreOffice)",
-      "packages": ["vlc", "firefox", "googlechrome", "7zip", "adobereader", "paint.net", "powertoys"],
+      "packages": ["vlc", "firefox", "googlechrome", "7zip", "adobereader", "paint.net", "outlook", "powertoys"],
       "branded": true
     }
   },
@@ -31,7 +31,8 @@
     "libreoffice":  { "winget": ["TheDocumentFoundation.LibreOffice"], "choco": "libreoffice-still" },
     "paint.net":    { "winget": ["dotPDN.PaintDotNet"], "choco": "paint.net" },
     "powertoys":    { "winget": ["Microsoft.PowerToys"], "wingetArgs": "--scope machine", "choco": "powertoys" },
-    "nvidia-app":   { "winget": ["XP8CLZL93F5Z4P"], "wingetSource": "msstore", "choco": "nvidia-app" }
+    "nvidia-app":   { "winget": ["XP8CLZL93F5Z4P"], "wingetSource": "msstore", "choco": "nvidia-app" },
+    "outlook":      { "winget": ["9NRX63209R7B"], "wingetSource": "msstore", "appx": "Microsoft.OutlookForWindows" }
   },
   "paths": {
     "installFolder": "C:\\Install"
@@ -47,7 +48,21 @@
       "C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\TCO Certified.lnk",
       "C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\Booking.lnk",
       "C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\LastPass.lnk"
-    ]
+    ],
+    "_taskbarPins": "Start-menu shortcut names pinned to the taskbar after the default pins (and kept off the desktop)",
+    "taskbarPins": ["Google Chrome.lnk", "Firefox.lnk"]
+  },
+  "office": {
+    "_comment": "office.ps1 (own menu item). The product must match the customer's licence - Microsoft: 'If you use the wrong product ID, you can't activate Office' (Learn: Product IDs supported by the ODT). oneDrive: the subscription includes OneDrive storage. setupUrl: the current ODT setup.exe (signature-checked; the bundled OfficeSetup.exe is the fallback).",
+    "setupUrl": "https://officecdn.microsoft.com/pr/wsus/setup.exe",
+    "products": [
+      { "key": "m365business",     "productId": "O365BusinessRetail",     "oneDrive": true },
+      { "key": "homebusiness2024", "productId": "HomeBusiness2024Retail", "oneDrive": false },
+      { "key": "home2024",         "productId": "Home2024Retail",         "oneDrive": false },
+      { "key": "m365home",         "productId": "O365HomePremRetail",     "oneDrive": true }
+    ],
+    "excludeApps": ["Groove", "Lync", "Publisher"],
+    "proofingLanguages": ["de-de", "it-it"]
   },
   "validation": {
     "requireInternet": true,

@@ -1,0 +1,7 @@
+Windows Registry Editor Version 5.00
+
+; Imported into the Default profile by the full run only (main.ps1 Step 11), after debloat.ps1
+; uninstalled OneDrive: new accounts install it at first sign-in through the Run value
+; "OneDriveSetup" (Microsoft Q&A); deleting it stops that. Keep this file ASCII.
+[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run]
+"OneDriveSetup"=-

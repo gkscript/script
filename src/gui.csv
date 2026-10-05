@@ -1,4 +1,5 @@
 Section,Method,Command,Arguments,Name,Description,Icon,NameKey
-Netixx GK,powershell_inline,.\src\main.ps1 -DeploymentType business -Language {lang} {updates},,Business,VLC · Firefox · Chrome · 7-Zip · Adobe Reader · PowerToys,E821,profile.business
-Netixx GK,powershell_inline,.\src\main.ps1 -DeploymentType consumer -Language {lang} {updates},,Consumer,VLC · Firefox · Chrome · 7-Zip · Adobe Reader · LibreOffice · Paint.NET · PowerToys,E80F,profile.consumer
-Netixx GK,powershell_inline,.\src\main.ps1 -DeploymentType consumer-nolo -Language {lang} {updates},,Consumer (No LibreOffice),VLC · Firefox · Chrome · 7-Zip · Adobe Reader · Paint.NET · PowerToys,E945,profile.consumer-nolo
+Netixx GK,powershell_inline,.\src\main.ps1 -DeploymentType business -Language {lang} {updates} {mode},,Business,VLC · Firefox · Chrome · 7-Zip · Adobe Reader · PowerToys,E821,profile.business
+Netixx GK,powershell_inline,.\src\main.ps1 -DeploymentType consumer -Language {lang} {updates} {mode},,Consumer,VLC · Firefox · Chrome · 7-Zip · Adobe Reader · LibreOffice · Paint.NET · Outlook · PowerToys,E80F,profile.consumer
+Netixx GK,powershell_inline,.\src\main.ps1 -DeploymentType consumer-nolo -Language {lang} {updates} {mode},,Consumer (No LibreOffice),VLC · Firefox · Chrome · 7-Zip · Adobe Reader · Paint.NET · Outlook · PowerToys,E945,profile.consumer-nolo
+Netixx GK,powershell_inline,.\src\office.ps1 -Language {lang},,Microsoft Office,M365 Business · Home & Business 2024 · Home 2024 · M365 Family/Personal,E8A5,menu.office

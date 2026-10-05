@@ -19,18 +19,26 @@ The menu opens in German. Switch to English or Italian with **DE · EN · IT** i
 | | Profile | Packages |
 |---|---|---|
 | 💼 | Business | VLC · Firefox · Chrome · 7-Zip · Adobe Reader · PowerToys |
-| 🏠 | Consumer | + LibreOffice · Paint.NET |
-| ⚡ | Consumer (No LibreOffice) | + Paint.NET |
+| 🏠 | Consumer | + LibreOffice · Paint.NET · Outlook (new, free) |
+| ⚡ | Consumer (No LibreOffice) | + Paint.NET · Outlook (new, free) |
+
+**Microsoft Office** is its own menu item: pick the product that matches the customer's licence (Microsoft 365 Business, Office Home & Business 2024, Office Home 2024, Microsoft 365 Family/Personal). The current installer is downloaded from Microsoft and installs silently in the Windows language with German/Italian proofing; any other Office is removed first. The customer signs in afterwards to activate.
 
 Packages come from winget (vendor installers, hash-checked); Chocolatey is only a fallback and is removed afterwards.
 
 All profiles include: all Windows updates (switchable in the menu), Office 365 uninstall, OEM branding, Netixx Helpdesk, bloatware/UWP removal (incl. Samsung Galaxy apps), OneDrive uninstalled, Windows suggestions/ads off, clean Start pins, daily Bing wallpaper, default apps for new accounts, desktop layout, cleanup and a restore point.
 
+## Two modes
+
+- **Full setup** (default) for a new PC: everything below.
+- **Install only** (menu switch "Nur nachinstallieren", `-InstallOnly`) for a PC already in use: apps, Helpdesk, OEM info, Netixx settings, updates and the Bing wallpaper. Nothing is removed or turned off: no antivirus/Office/OneDrive removal, no debloat, no desktop cleanup or layout, no BitLocker change, no Start pins, the recycle bin stays. Only the desktop shortcuts the installers just added go. A restore point is created first.
+- A full run on a PC that looks used (an earlier run, personal files, Windows older than 30 days) asks first and offers install only.
+
 ## What it does (in order)
 
 1. Pre-flight checks — admin, internet, time sync, disk space (5 GB), GPU, BitLocker
 2. Remove preinstalled antivirus trials silently where possible; the rest is flagged for manual removal
-3. Install packages with winget (Firefox in the Windows language; Chrome and PowerToys machine-wide); Chocolatey only if winget fails
+3. Install packages with winget (Firefox in the Windows language; Chrome and PowerToys machine-wide), update the ones already there; Chocolatey only if winget fails
 4. **Windows Update** (unless switched off in the menu): every available update — drivers (covers AMD), security/quality, optional and preview updates, feature upgrades, Defender definitions; then the NVIDIA App on NVIDIA GPUs
 5. Registry and system settings: OEM branding, Windows suggestions/ads/Widgets/Recall/Edge ads off, Storage Sense, Fast Startup off, End task in the taskbar, Windows Terminal as default console, Defender blocks unwanted apps, sudo (new-window mode), notebook power settings on AC
 6. Remove bloatware shortcuts, clean desktop shortcuts (whitelist-based; never on a OneDrive-redirected desktop)
@@ -38,7 +46,7 @@ All profiles include: all Windows updates (switchable in the menu), Office 365 u
 8. Set up `C:\Install` (locked down), download the Netixx Helpdesk (signature-checked)
 9. Uninstall Office 365 (Office Deployment Tool → winget → silent registry fallback)
 10. Remove UWP bloat (Win11Debloat's default selection, OEM promo apps, Samsung Galaxy ecosystem apps; OEM update/hotkey/battery tools are kept) and Win32 promo software; uninstall OneDrive (also kept from installing in accounts created later); then update installed apps with winget
-11. Prepare accounts created later (the customer's): Default profile settings, default apps via DISM; clean Start pins (applied once); daily Bing wallpaper (4K) for every account
+11. Prepare accounts created later (the customer's): Default profile settings, default apps via DISM; clean Start pins and Chrome/Firefox on the taskbar after the default pins (both applied once, instead of desktop icons); daily Bing wallpaper (4K) for every account
 12. Health checks: activation, Defender, edition vs. profile
 13. Clean up: update leftovers (DISM), Chocolatey, temp files, recycle bin; setup files removed at the next start; restore point
 14. Apply desktop icon layout, restart Explorer
@@ -80,6 +88,7 @@ powershell -ExecutionPolicy Bypass -File src\main.ps1 -DeploymentType consumer-n
 
 # Optional flags
 -SkipUpdates            # No Windows Update and no app updates
+-InstallOnly            # PC already in use: install and configure, remove nothing
 -SkipBloatwareRemoval   # Skip bloat/shortcut cleanup
 -SkipHideConsole        # Keep the console window visible
 -ConfigPath <path>      # Use alternate config.json
@@ -120,6 +129,15 @@ src/
 - **Texts / translations**: edit `src/lang/de.json`, `en.json`, `it.json` (same keys in all three)
 
 ## Changelog
+
+### v2.1.0 — 2026-10-05
+- Microsoft Office as its own menu item: Microsoft 365 Business, Home & Business 2024, Home 2024 or Microsoft 365 Family/Personal, with the current installer from Microsoft, German/Italian proofing, classic and new Outlook
+- Chrome and Firefox are pinned to the taskbar (after the default pins, once) instead of sitting on the desktop
+- Consumer profiles install and update the free new Outlook instead of removing it
+- Apps that are already installed are updated during the run
+- Install-only mode for PCs already in use (menu switch / `-InstallOnly`): installs and configures, removes nothing
+- A full run on a PC that looks used asks first: install only, full setup anyway, or cancel
+- The daily Bing wallpaper no longer replaces a picture the user chose, a slideshow or a solid color
 
 ### v2.0.1 — 2026-10-05
 - Fixed: the exe ran the whole setup in 32-bit PowerShell (the NSIS stub is 32-bit). OEM support info and other `HKLM\SOFTWARE` writes landed in `WOW6432Node`, 64-bit programs were invisible to the antivirus/Office/promo-software removal, and Explorer's Winlogon switch hit the wrong key. `launch.bat` now starts the 64-bit PowerShell, and `main.ps1` restarts itself in 64-bit if started from a 32-bit process.

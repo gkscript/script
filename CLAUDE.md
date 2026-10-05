@@ -34,8 +34,12 @@ From the repository root (admin required):
 ```powershell
 launch.bat   # UAC self-elevation via VBS, then Show-ScriptMenuGui -csvpath .\src\gui.csv
 
+powershell -ExecutionPolicy Bypass -File src\office.ps1 [-Product m365business|homebusiness2024|home2024|m365home] [-Language de|en|it]
+    # Office on its own (menu item "Microsoft Office installieren"); without -Product it asks
+
 powershell -ExecutionPolicy Bypass -File src\main.ps1 -DeploymentType business|consumer|consumer-nolo
     [-SkipUpdates]            # no Windows Update, no app updates (menu: "install all updates" off)
+    [-InstallOnly]            # PC already in use: install and configure, remove nothing (menu: "install only")
     [-SkipBloatwareRemoval]   # skips Step 5 (shortcut cleanup + desktop whitelist) only; debloat.ps1 still runs
     [-ConfigPath <path>]      # alternate config.json
     [-Language de|en|it]      # UI language of the result window (default de); the log stays English
@@ -52,7 +56,7 @@ gk-script.exe (NSIS) → launch.bat → PSScriptMenuGui (reads src/gui.csv) → 
 ```
 
 - **`src/gui.csv`** is the only input to the vendored `PSScriptMenuGui` module. Each row is one button: `Section, Method (powershell_inline), Command, Arguments, Name, Description, Icon, NameKey`.
-  - When a row is launched, `{lang}` in `Command` becomes the menu's current language, and `{updates}` becomes `-SkipUpdates` while the menu's updates switch is off.
+  - When a row is launched, `{lang}` in `Command` becomes the menu's current language, `{updates}` becomes `-SkipUpdates` while the menu's updates switch is off, and `{mode}` becomes `-InstallOnly` while the install-only switch is on. Each switch's `Tag` names the menu state key it sets.
   - `NameKey` points to a translated name in `src/lang` (it falls back to `Name`). `Icon` is an optional Segoe Fluent Icons code point in hex (e.g. `E821`). Keep emoji out of `Name`, because screen readers announce them.
   - Profile names must also match `ValidateSet` in `main.ps1` and a key under `deployment` in `config.json`.
 - **`src/config.json`** defines:
@@ -60,10 +64,16 @@ gk-script.exe (NSIS) → launch.bat → PSScriptMenuGui (reads src/gui.csv) → 
   - `packageCatalog`: per key, the winget ID list (tried in order; `{uilang}` = Windows display language), an optional `wingetSource`/`wingetArgs`, and the Chocolatey fallback ID plus `chocoParams`;
   - the install folder, the Start-menu shortcuts to delete, the log path and the minimum disk space.
   - `main.ps1` converts only the **top level** to hashtables (nested objects stay `PSCustomObject`; keys starting with `_` are skipped).
-- **`src/lib/PSSetupUtility.psm1`**: `Write-Log`, `Initialize-Logging`, `Test-Prerequisite*`, `Sync-SystemTimeWithInternet`, `Get-SystemGPU`, `Get-BitlockerStatus`, `Invoke-NativeCommand`, `Invoke-SilentUninstall`, `Get-UninstallEntries`, `Get-LogIssues`, `Set-KeepAwake`, `Show-SetupResult` and the language functions. `debloat.ps1` runs in the same session, so these are available there too.
+- **`src/office.ps1`** installs one Office product, separately from the profiles. Microsoft: "If you use the wrong product ID, you can't activate Office", so the technician picks the product matching the customer's licence in a question window (rows from `config.office.products`).
+  - `O365BusinessRetail` covers Apps for Business, Business Standard and Business Premium; `HomeBusiness2024Retail` and `Home2024Retail` are the 2024 one-time purchases; `O365HomePremRetail` is Family/Personal.
+  - It downloads the current ODT `setup.exe` from `config.office.setupUrl` (Microsoft signature checked; the bundled `OfficeSetup.exe` is the fallback). Any other Office suite is removed first (`Uninstall-Microsoft365`); the same product is just updated.
+  - `New-OfficeConfiguration` writes the XML: 64-bit, Current Channel, `MatchOS` language, proofing tools for the other `proofingLanguages`, `excludeApps` (+ OneDrive for products with `oneDrive: false`), classic and new Outlook, RemoveMSI, silent. Success = the product is in `ProductReleaseIds` and `WINWORD.EXE` exists. It logs to `office_*.log`, which the used-PC check ignores.
+- **`src/lib/Office.ps1`** (dot-sourced by the module): `Get-OfficeProductIds`, `Get-OfficeSetup`, `New-OfficeConfiguration`, `Uninstall-Microsoft365` (shared with `main.ps1` Step 9).
+- **`src/lib/PSSetupUtility.psm1`**: `Write-Log`, `Initialize-Logging` (`-Name` = log prefix), `Restart-In64BitPowerShell`, `Test-Prerequisite*`, `Sync-SystemTimeWithInternet`, `Get-SystemGPU`, `Get-BitlockerStatus`, `Invoke-NativeCommand`, `Invoke-SilentUninstall`, `Get-UninstallEntries`, `Get-LogIssues`, `Set-KeepAwake`, `Show-SetupResult` and the language functions. `debloat.ps1` runs in the same session, so these are available there too.
 - **Result window**: `Show-SetupResult` loads `src/lib/SetupResult.xaml`, a WPF window with Success, Warning and Failed states. It replaces every MessageBox in the run.
   - The status color fills the band, the title bar (DWM caption color) and the taskbar button (`TaskbarItemInfo`), so the outcome reads from across the room.
   - `-Notes` shows steps left to the technician, with an info icon and no effect on the band color. Today that is the reminder to confirm default apps for the current account.
+  - `-Choices` turns the window into a question: the given buttons replace Open log / Restart / Close, and the clicked choice's `Key` is returned (the MessageBox fallback maps them to Yes/No/Cancel). `-Heading` replaces the heading above the items. Used for the used-PC question. Choices with a `Description` render as menu-style rows (title, caption, chevron) instead of buttons; `-Status Question` gives the menu's Netixx-blue band (office.ps1's product choice).
   - If the XAML fails to load, the function falls back to a MessageBox, because this window is the only result signal. The design contract is the comment at the top of the XAML.
 - **Visual rules live in `DESIGN.md`** (tokens, the band anatomy, named rules, do's and don'ts). `PRODUCT.md` holds who uses the tool and why. Read both before touching any window.
 - **One window system**: the menu (`src/PSScriptMenuGui/xaml/start.xaml`) and the result window share `src/lib/Theme.xaml`.
@@ -76,6 +86,11 @@ gk-script.exe (NSIS) → launch.bat → PSScriptMenuGui (reads src/gui.csv) → 
 
 ### main.ps1 flow
 
+**Two modes.** The full setup is for a new PC. `-InstallOnly` is for a PC already in use: it installs and configures, and removes or turns off nothing.
+- Install only skips: antivirus removal (0), notebook power and the current account's theme colors (4), the whitelist cleanup (5: only shortcuts the installers just added and that aren't whitelisted are removed, via a snapshot before Step 2), BitLocker (6), Office removal, debloat, OneDrive removal and the branding re-apply (9-10), Start pins and the default-apps note (11), emptying the recycle bin (13) and the Explorer/desktop-layout step.
+- It keeps everything else, including all Netixx settings, `disable_telemetry.reg` (imported in Step 4 because debloat doesn't run), all updates, branding and the Helpdesk. The restore point is created first instead of last.
+- Before Step 0, a full run checks for signs of use (`Get-UsedPcSigns`): a log from an earlier run, 10+ personal files in an account's Desktop/Documents/Pictures/Videos/Music/OneDrive folders, or Windows installed more than 30 days ago. If any is found, the result window asks: install only (recommended), full setup anyway, or cancel (exits without changes).
+
 The step numbers below match the `Write-Log "Step N"` messages in the code.
 
 - **Start.** Load config, init logging, then pre-flight checks: admin, internet, NTP time sync, disk space, GPU detect, BitLocker status.
@@ -85,7 +100,8 @@ The step numbers below match the `Write-Log "Step N"` messages in the code.
   - It uninstalls through `Invoke-SilentUninstall`: `msiexec /x /qn` or `QuietUninstallString` only, with a timeout, never a wizard. HP Wolf is removed in order: product, then console, then update service.
   - The rest becomes a "manual removal" warning (`$script:ThirdPartyAvRemains`).
   - Then it records whether Chocolatey was already present, and `Initialize-Winget` registers App Installer if winget isn't usable yet (a documented first-logon delay).
-- **2. Packages.** `Install-AppPackages` tries winget for each package first (`Install-WingetPackage`: up to 2 attempts, 20-min timeout, success verified with `winget list`; exit `0x8A150014` = ID not found, so try the next ID).
+- **2. Packages.** `Install-AppPackages` tries winget for each package first (`Install-WingetPackage`: up to 2 attempts, 20-min timeout, success verified with `winget list`; exit `0x8A150014` = ID not found, so try the next ID). An already installed package is updated (`winget upgrade`), unless `-SkipUpdates`. A catalog entry without `choco` (Store-only apps) has no Chocolatey fallback.
+  - The consumer profiles include the free **new Outlook** (msstore `9NRX63209R7B`, preinstalled on Windows 11 and updated here). Its catalog `appx` name is passed to `debloat.ps1 -KeepApps`, so debloat doesn't remove it; the business profile still removes it.
   - If winget fails, Chocolatey is the fallback, installed on demand. The old `Install-Packages` choco loop is kept for that: retry, kill timer, `Wait-MsiIdle`, and `--ignore-checksums` only for Chrome.
   - Firefox resolves to `Mozilla.Firefox.de`/`.it` by display language. Chrome and PowerToys use `--scope machine`. Adobe from winget keeps its auto-update; the Chocolatey fallback gets `/UpdateMode:3 /EnableUpdateService`.
 - **3. GPU and updates.** Drivers for every GPU vendor come from Windows Update. Intel's control panel is installed by the Intel driver itself.
@@ -98,7 +114,7 @@ The step numbers below match the `Write-Log "Step N"` messages in the code.
   - `machine_settings.reg` (HKLM) covers the Widgets policy, Recall/Click to Do, Edge ads/first-run, the Storage Sense policy (weekly; temp files; recycle bin 30 days; Downloads never), and Fast Startup off.
   - Values come from Win11Debloat's Regfiles and the local ADMX files. Both files are ASCII.
   - Then: Defender PUA blocking on; `Set-NotebookPower` (battery present only: on AC no sleep, display off after 30 min, lid = nothing); `Enable-WindowsSudo` (`sudo config --enable forceNewWindow`; explicit mode, because `--enable enable` means inline).
-- **5. Shortcuts and desktop.** Shortcuts from `config.windows.shortcuts` are deleted.
+- **5. Shortcuts and desktop.** Shortcuts from `config.windows.shortcuts` are deleted. Chrome and Firefox are not on the whitelist: they go to the taskbar (Step 11). If `Test-TaskbarPinSupport` says this Windows can't pin them (below 24H2 build 26100.4484 and `-SkipUpdates`), `config.windows.taskbarPins` are kept on the desktop instead.
   - `Clear-DesktopIcons` removes only `.lnk`/`.url` files that aren't in `whitelist.txt` (wildcards allowed), never recursively.
   - It cleans the Public Desktop, and the user's desktop **only while it is the local folder**. A OneDrive-redirected desktop holds the customer's synced files.
 - **6. BitLocker.** Disabled on C: if encrypted. This is a deliberate Netixx decision.
@@ -113,7 +129,7 @@ The step numbers below match the `Write-Log "Step N"` messages in the code.
     - The offline fallback is the same default selection as of 2026-10-04.
     - Per-user removal and deprovisioning have separate try blocks.
   - **Win32 promo/trial software:** `Remove-Win32Bloat` matches the uninstall-registry `DisplayName` (language-independent) and uninstalls through `Invoke-SilentUninstall`. Kept on purpose: HP System Event Utility, HP Smart/myHP, Intel Optane tools. The old "office" winget name also matched OneDrive, so it is gone.
-  - **OneDrive** is uninstalled on every profile (`Remove-OneDrive`: `OneDriveSetup.exe /uninstall [/allusers]`, silent by design, hence `Invoke-SilentUninstall -UninstallStringIsSilent`). `user_settings.reg` deletes the Run value `OneDriveSetup`, which installs OneDrive at an account's first sign-in. Because `user_settings.reg` is also imported into the Default profile, accounts created later don't get it back.
+  - **OneDrive** is uninstalled on every profile (`Remove-OneDrive`: `OneDriveSetup.exe /uninstall [/allusers]`, silent by design, hence `Invoke-SilentUninstall -UninstallStringIsSilent`). The Run value `OneDriveSetup` installs OneDrive at an account's first sign-in; the full run imports `onedrive_setup_off.reg` into the Default profile (Step 11) to delete it, so accounts created later don't get OneDrive back. Install only keeps OneDrive and that value.
   - `disable_telemetry.reg`.
   - Then `Logo_Info.reg` is re-applied, because OEM services can reset `OEMInformation`. Branding is Manufacturer, SupportProvider, phone and URL; the Logo value is deprecated and no longer shown in Windows 11.
   - **10b.** Unless `-SkipUpdates`: `winget upgrade --all --source winget`, silently, with a 30-min timeout.
@@ -123,9 +139,11 @@ The step numbers below match the `Write-Log "Step N"` messages in the code.
     - SetUserFTA was removed: it can't change protected defaults on Home/Pro (UCPD, UserChoiceLatest), and its free edition is non-commercial.
     - The current account gets a note in the result window instead.
   - `Set-StartPins` writes `C:\Install\StartPins.json` (`applyOnce: true`, existing shortcuts only) and sets the "Configure Start Pins" policy (`HKLM\SOFTWARE\Policies\Microsoft\Windows\Explorer`: `ConfigureStartPins=1`, `ConfigureStartPinsJSON` = path, per Microsoft Learn). This needs 24H2 + KB5062660.
+  - `Set-TaskbarPins` (both modes) writes `C:\Install\TaskbarLayout.xml` and sets the "Start Layout" policy (`LockedStartLayout=1`, `StartLayoutFile` = path; Microsoft Learn taskbar/pinned-apps, local StartMenu.admx). No `PinListPlacement="Replace"`, so Edge, Store and File Explorer stay and Chrome/Firefox follow; `PinGeneration="1"` applies each pin once, so one the user removes stays removed. Current and later accounts get it at their next sign-in. The XML must keep existing and must not contain comments.
     - The pins: Chrome, Firefox, File Explorer, Settings, Store, Photos, Calculator, Notepad, Snipping Tool, LibreOffice Writer/Calc (consumer) and Netixx Helpdesk (via a Start-menu `.lnk`).
   - `Register-BingWallpaper` copies `BingWallpaper.ps1` to `C:\Install` and registers the task `\Netixx\Bing Wallpaper` for the Users group (at sign-in and daily at 06:00, hidden via `conhost --headless`), then runs it once for the current account.
     - The script takes the newest picture of the last 8 days that Bing allows as wallpaper (`wp` not false), at the largest size (`_UHD`, 3840x2160). The market is it-IT or de-DE, by display language.
+    - It only replaces the Windows/OEM default (under `%SystemRoot%` or `%ProgramData%`), Spotlight or an earlier Bing picture. A picture of the user's own, a slideshow or a solid color stays (`Test-WallpaperReplaceable`).
 - **12. Health checks.** `Test-SetupHealth` covers activation, Defender (signatures updated, `AMRunningMode` Normal plus real-time on) and a Business profile on a Home edition.
 - **13. Cleanup.** `DISM /StartComponentCleanup` (unless `-SkipUpdates`; no `/ResetBase`), then `Remove-ChocolateyIfInstalledByUs`.
   - `Invoke-FinalCleanup` clears the Windows and user temp folders (never the running setup folder), the recycle bin and the Delivery Optimization cache.
@@ -183,7 +201,7 @@ These have caused real runtime bugs. Understand them before editing any source f
 The NSIS stub of `gk-script.exe` is a 32-bit process, and every child inherits that: a plain `powershell` started from it is `SysWOW64\...\powershell.exe`.
 - A 32-bit PowerShell writes `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion` (OEMInformation, Uninstall) and `Winlogon` to `WOW6432Node`. `HKLM\SOFTWARE\Policies` is shared and was unaffected.
 - It sees only the 32-bit half of the uninstall registry, and it gets the 32-bit DISM.
-- `launch.bat` therefore starts `%SystemRoot%\Sysnative\...\powershell.exe` when that path exists, and `main.ps1` relaunches itself in 64-bit (forwarding its parameters) when started from any 32-bit process.
+- `launch.bat` therefore starts `%SystemRoot%\Sysnative\...\powershell.exe` when that path exists, and `main.ps1` and `office.ps1` relaunch themselves in 64-bit via `Restart-In64BitPowerShell` (forwarding their parameters) when started from any 32-bit process.
 - Testing from VS Code or a normal console never shows this. To reproduce the exe's context, start from `%SystemRoot%\SysWOW64\cmd.exe`.
 
 

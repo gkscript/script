@@ -63,6 +63,9 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
                 </ItemsControl>
             </ScrollViewer>
 
+            <!-- Question with longer choices (Show-SetupResult -Choices with Description): menu-style rows -->
+            <StackPanel x:Name="ChoiceRows" Margin="0,2,0,0" Visibility="Collapsed"/>
+
             <!-- Shown only when Windows Update drivers need a reboot and warnings are listed -->
             <Grid x:Name="RestartRow" Margin="0,8,0,0" Visibility="Collapsed">
                 <Grid.ColumnDefinitions>
@@ -106,8 +109,8 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         </StackPanel>
 
         <!-- Actions -->
-        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="32,22,32,26">
-            <!-- Texts are set from src/lang by Show-SetupResult -->
+        <StackPanel x:Name="ActionsPanel" Orientation="Horizontal" HorizontalAlignment="Right" Margin="32,22,32,26">
+            <!-- Texts are set from src/lang by Show-SetupResult; -Choices replaces these buttons -->
             <Button x:Name="OpenLogButton" Style="{StaticResource ActionButton}"
                     AutomationProperties.AutomationId="OpenLog"/>
             <Button x:Name="RestartButton" Style="{StaticResource AccentButton}"

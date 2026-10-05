@@ -1,4 +1,8 @@
 #https://github.com/Raphire/Win11Debloat
+param(
+    # Store apps the profile installs on purpose (main.ps1, catalog "appx"), e.g. new Outlook
+    [string[]]$KeepApps = @()
+)
 
 # main.ps1 runs with 'Stop'; here one non-removable app must not abort the rest
 $ErrorActionPreference = 'Continue'
@@ -80,7 +84,7 @@ function Remove-Win32Bloat {
 # OneDrive is removed on every profile (Netixx decision, 2026-10). "OneDriveSetup.exe /uninstall"
 # (per-machine: "/uninstall /allusers") is silent; its uninstall entry just has no
 # QuietUninstallString. Accounts created later would get OneDrive back through the Default
-# profile's Run value "OneDriveSetup" - user_settings.reg deletes it there.
+# profile's Run value "OneDriveSetup" - onedrive_setup_off.reg deletes it there (main.ps1 Step 11).
 function Remove-OneDrive {
     $entries = @(Get-ItemProperty -ErrorAction SilentlyContinue -Path @(
         'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\OneDriveSetup.exe'
@@ -234,6 +238,9 @@ $oemAndExtras = @(
     "Microsoft.Whiteboard"
     "Microsoft.People"
 )
+
+# The profile's own Store apps stay too
+$KeepApps | Where-Object { $_ } | ForEach-Object { $null = $excluded.Add($_) }
 
 # Try to fetch the latest list from Win11Debloat
 $appxToRemove = $null

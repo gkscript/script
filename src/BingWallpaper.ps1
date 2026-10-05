@@ -5,6 +5,8 @@
 # It runs in the user's own session. It uses the newest picture of the last 8 days that Bing
 # allows as wallpaper ("wp" not false); offline, the current wallpaper simply stays.
 # Market follows the Windows display language: it-IT for Italian, otherwise de-DE.
+# The user's own choice wins: only the Windows/OEM default, Spotlight or an earlier Bing picture
+# is replaced - a picture of their own, a slideshow or a solid color stays.
 # Keep this file ASCII (Windows PowerShell 5.1 reads scripts without BOM as ANSI).
 
 $ErrorActionPreference = 'Stop'
@@ -18,8 +20,28 @@ function Write-WallpaperLog([string]$Text) {
     } catch { }
 }
 
+# HKCU\Control Panel\Desktop\WallPaper holds the source path of the chosen picture (verified
+# 2026-10); Explorer\Wallpapers\BackgroundType 0 = picture, 1 = solid color, 2 = slideshow,
+# 3 = Spotlight (elevenforum.com tutorial 909).
+function Test-WallpaperReplaceable {
+    $type = (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Wallpapers' -ErrorAction SilentlyContinue).BackgroundType
+    if ($type -in 1, 2) { return $false }
+    $spotlight = (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\DesktopSpotlight\Settings' -ErrorAction SilentlyContinue).EnabledState
+    if ($type -eq 3 -or $spotlight -eq 1) { return $true }
+    $current = (Get-ItemProperty 'HKCU:\Control Panel\Desktop' -ErrorAction SilentlyContinue).WallPaper
+    if (-not $current) { return $true }
+    foreach ($root in $env:SystemRoot, $env:ProgramData, $folder) {
+        if ($current.StartsWith($root.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)) { return $true }
+    }
+    return $false
+}
+
 try {
     New-Item -ItemType Directory -Force -Path $folder | Out-Null
+    if (-not (Test-WallpaperReplaceable)) {
+        Write-WallpaperLog "the user's own wallpaper is set - kept"
+        return
+    }
     $market = if ((Get-UICulture).TwoLetterISOLanguageName -eq 'it') { 'it-IT' } else { 'de-DE' }
 
     # The last 8 days, newest first; use the newest picture Bing allows as wallpaper. Some days'

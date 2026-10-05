@@ -110,6 +110,9 @@ Function Get-MenuDataContext {
         UpdatesEnabled = [bool]$state.UpdatesEnabled
         UpdatesLabel = Get-UiText menu.updates
         UpdatesHint = Get-UiText menu.updatesHint
+        InstallOnly = [bool]$state.InstallOnly
+        InstallOnlyLabel = Get-UiText menu.installOnly
+        InstallOnlyHint = Get-UiText menu.installOnlyHint
         IconPath = $state.IconPath
         MenuItems = @($items)
         IsDe = $lang -eq 'de'
@@ -124,11 +127,12 @@ Function Invoke-ButtonAction {
     )
     Write-Verbose "$buttonName clicked"
 
-    # Get relevant CSV row (a copy: the {lang} placeholder is filled per launch)
+    # Get relevant CSV row (a copy: the placeholders are filled per launch)
     $csvMatch = $script:csvData | Where-Object {$_.Reference -eq $buttonName} | Select-Object *
-    $csvMatch.Command = $csvMatch.Command.Replace('{lang}', (Get-UiLanguage))
     $updatesSwitch = if ($script:menuState.UpdatesEnabled) { '' } else { '-SkipUpdates' }
-    $csvMatch.Command = $csvMatch.Command.Replace('{updates}', $updatesSwitch).TrimEnd()
+    $modeSwitch = if ($script:menuState.InstallOnly) { '-InstallOnly' } else { '' }
+    $command = $csvMatch.Command.Replace('{lang}', (Get-UiLanguage)).Replace('{updates}', $updatesSwitch)
+    $csvMatch.Command = $command.Replace('{mode}', $modeSwitch).Trim() -replace '\s{2,}', ' '
     Write-Verbose $csvMatch
 
     # Pipe match to Start-Script function

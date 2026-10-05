@@ -19,32 +19,24 @@ param(
 
     # No Windows Update and no app updates (menu: "install all updates" switched off)
     [Parameter()]
-    [switch]$SkipUpdates
-)
+    [switch]$SkipUpdates,
 
-# gk-script.exe's NSIS stub is a 32-bit process, and everything it starts inherits that. A 32-bit
-# PowerShell writes HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion (OEMInformation) and Winlogon
-# to WOW6432Node, sees only 32-bit programs in the uninstall registry and gets the 32-bit DISM.
-# launch.bat starts the 64-bit PowerShell; this catches any other 32-bit caller.
-if ([Environment]::Is64BitOperatingSystem -and -not [Environment]::Is64BitProcess) {
-    $relaunch = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"")
-    foreach ($parameter in $PSBoundParameters.GetEnumerator()) {
-        if ($parameter.Value -is [System.Management.Automation.SwitchParameter]) {
-            if ($parameter.Value.IsPresent) { $relaunch += "-$($parameter.Key)" }
-        } else {
-            $relaunch += "-$($parameter.Key)", "`"$($parameter.Value)`""
-        }
-    }
-    $native = Start-Process -FilePath "$env:SystemRoot\Sysnative\WindowsPowerShell\v1.0\powershell.exe" `
-        -ArgumentList $relaunch -NoNewWindow -Wait -PassThru
-    exit $native.ExitCode
-}
+    # For a PC already in use: install and configure, remove nothing (menu: "install only").
+    # Skips antivirus/Office/OneDrive removal, debloat, desktop cleanup and layout, BitLocker,
+    # Start pins, theme colors, power settings and emptying the recycle bin.
+    [Parameter()]
+    [switch]$InstallOnly
+)
 
 # Stop on first error
 $ErrorActionPreference = 'Stop'
 
 # Import utility functions
 Import-Module "$PSScriptRoot\lib\PSSetupUtility.psm1" -Force
+
+# Started from the exe's 32-bit stub (or any 32-bit process): run again in 64-bit PowerShell
+$relaunchExit = Restart-In64BitPowerShell -ScriptPath $PSCommandPath -BoundParameters $PSBoundParameters
+if ($null -ne $relaunchExit) { exit $relaunchExit }
 Set-UiLanguage $Language
 
 $script:StartTime = Get-Date
@@ -56,7 +48,9 @@ Function Get-RunSummary {
     $minutes = [int][math]::Floor(((Get-Date) - $script:StartTime).TotalMinutes)
     $duration = if ($minutes -lt 1) { Get-UiText duration.lessThanMinute } else { Get-UiText duration.minutes $minutes }
     $profileName = Get-UiText "profile.$DeploymentType"
-    return ($profileName, $env:COMPUTERNAME, $duration) -join " $([char]0xB7) "
+    $parts = @($profileName)
+    if ($InstallOnly) { $parts += Get-UiText summary.installOnly }
+    return ($parts + @($env:COMPUTERNAME, $duration)) -join " $([char]0xB7) "
 }
 
 # Load configuration first (to get log path from config)
@@ -142,6 +136,7 @@ if (-not $deploymentConfig) {
 
 Write-Log "Deploying: $($deploymentConfig.name)"
 
+
 # ============================================================================
 # FUNCTION DEFINITIONS
 # ============================================================================
@@ -220,6 +215,7 @@ $script:PackageDisplayNames = @{
     'libreoffice-still'  = 'LibreOffice'
     'paint.net'          = 'paint.net'
     'powertoys'          = 'PowerToys'
+    'outlook'            = 'Outlook'
 }
 
 Function Test-PackageInstalledInRegistry {
@@ -556,19 +552,46 @@ Function Remove-BloatwareShortcuts {
     }
 }
 
+Function Get-DesktopShortcuts {
+    <#
+    .SYNOPSIS
+        Shortcut files (.lnk/.url) on the desktops this tool may clean
+    .DESCRIPTION
+        The Public Desktop (where installers put their shortcuts) and the user's desktop only
+        while it is the local folder: with OneDrive backup it holds the customer's synced
+        files, and deletions there would sync to the cloud. Never recursive.
+    #>
+    $folders = @([Environment]::GetFolderPath('CommonDesktopDirectory'))
+    $userDesktop = [Environment]::GetFolderPath('Desktop')
+    if ($userDesktop.TrimEnd('\') -ieq (Join-Path $env:USERPROFILE 'Desktop').TrimEnd('\')) {
+        $folders += $userDesktop
+    } else {
+        Write-Log "  User desktop is redirected ($userDesktop) - left untouched"
+    }
+    foreach ($folder in $folders) {
+        if (-not $folder -or -not (Test-Path -LiteralPath $folder)) { continue }
+        Get-ChildItem -LiteralPath $folder -File -Force -ErrorAction SilentlyContinue |
+            Where-Object { $_.Extension -in '.lnk', '.url' }
+    }
+}
+
 Function Clear-DesktopIcons {
     <#
     .SYNOPSIS
         Remove desktop shortcuts that are not on the whitelist
     .DESCRIPTION
-        Only shortcut files (.lnk/.url) are removed - never folders or documents, never
-        recursively. Covers the Public Desktop (where installers put their shortcuts) and
-        the user's desktop only while it is the local folder: with OneDrive backup it holds
-        the customer's synced files, and deletions there would sync to the cloud.
+        Only shortcut files are removed - never folders or documents (Get-DesktopShortcuts).
         Whitelist entries may use wildcards (e.g. LibreOffice*.lnk).
+    .PARAMETER Keep
+        Full paths left alone: the install-only run passes the shortcuts that were there
+        before it installed anything, so only the installers' new ones go
+    .PARAMETER ExtraWhitelist
+        Names kept in addition to whitelist.txt (the taskbar apps when Windows can't pin them)
     #>
     param(
-        [string]$WhitelistPath
+        [string]$WhitelistPath,
+        [string[]]$Keep = @(),
+        [string[]]$ExtraWhitelist = @()
     )
 
     Write-Log "Cleaning desktop icons..."
@@ -579,29 +602,15 @@ Function Clear-DesktopIcons {
             return
         }
 
-        $whitelist = @(Get-Content $WhitelistPath | Where-Object { $_.Trim() } | ForEach-Object { $_.Trim() })
+        $whitelist = @(Get-Content $WhitelistPath | Where-Object { $_.Trim() } | ForEach-Object { $_.Trim() }) + @($ExtraWhitelist)
         $isWhitelisted = { param($name) [bool]($whitelist | Where-Object { $name -like $_ }) }
 
-        $folders = @([Environment]::GetFolderPath('CommonDesktopDirectory'))
-        $userDesktop = [Environment]::GetFolderPath('Desktop')
-        $localDesktop = Join-Path $env:USERPROFILE 'Desktop'
-        if ($userDesktop.TrimEnd('\') -ieq $localDesktop.TrimEnd('\')) {
-            $folders += $userDesktop
-        } else {
-            Write-Log "  User desktop is redirected ($userDesktop) - left untouched"
-        }
-
         $removedCount = 0
-        foreach ($folder in $folders) {
-            if (-not $folder -or -not (Test-Path -LiteralPath $folder)) { continue }
-            $shortcuts = Get-ChildItem -LiteralPath $folder -File -Force -ErrorAction SilentlyContinue |
-                Where-Object { $_.Extension -in '.lnk', '.url' }
-            foreach ($item in $shortcuts) {
-                if (& $isWhitelisted $item.Name) { continue }
-                Write-Log "  Removing: $($item.FullName)"
-                Remove-Item -LiteralPath $item.FullName -Force -ErrorAction Continue
-                $removedCount++
-            }
+        foreach ($item in Get-DesktopShortcuts) {
+            if ((& $isWhitelisted $item.Name) -or $Keep -contains $item.FullName) { continue }
+            Write-Log "  Removing: $($item.FullName)"
+            Remove-Item -LiteralPath $item.FullName -Force -ErrorAction Continue
+            $removedCount++
         }
 
         Write-Log "Removed $removedCount desktop shortcuts" -Level Success
@@ -613,123 +622,6 @@ Function Clear-DesktopIcons {
 }
 
 
-
-Function Uninstall-Microsoft365 {
-    Write-Log "Uninstalling Microsoft 365..."
-
-    $clickToRunKey = 'HKLM:\SOFTWARE\Microsoft\Office\ClickToRun\Configuration'
-    $regPaths = @(
-        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
-        'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*'
-    )
-
-    function Get-OfficeUninstallEntries {
-        Get-ItemProperty $regPaths -ErrorAction SilentlyContinue |
-            Where-Object { $_.DisplayName -match '^(Microsoft 365|Microsoft Office)' -and -not $_.SystemComponent }
-    }
-
-    # Covers Click-to-Run (ProductReleaseIds) and MSI-based Office (uninstall entries)
-    function Test-OfficeStillInstalled {
-        if (Test-Path $clickToRunKey) {
-            $ids = (Get-ItemProperty -Path $clickToRunKey -Name ProductReleaseIds -ErrorAction SilentlyContinue).ProductReleaseIds
-            if (-not [string]::IsNullOrWhiteSpace($ids)) { return $true }
-        }
-        return [bool](Get-OfficeUninstallEntries)
-    }
-
-    if (-not (Test-OfficeStillInstalled)) {
-        Write-Log "Microsoft 365 not detected - skipping" -Level Info
-        return
-    }
-
-    # Pass 1: Office Deployment Tool - silent by design (Display Level=None), removes
-    # every Click-to-Run product/language and MSI Office in one go
-    $odtPath = Join-Path $PSScriptRoot "OfficeSetup.exe"
-    $odtXml  = Join-Path $PSScriptRoot "office.xml"
-    if ((Test-Path $odtPath -PathType Leaf) -and (Test-Path $odtXml -PathType Leaf)) {
-        Write-Log "Attempting Office removal via Office Deployment Tool..." -Level Info
-        try {
-            $odt = Start-Process -FilePath $odtPath -ArgumentList @('/configure', "`"$odtXml`"") -NoNewWindow -PassThru
-            $null = $odt.Handle
-            if ($odt.WaitForExit(20 * 60 * 1000)) {
-                Write-Log "  Office Deployment Tool exit code: $($odt.ExitCode)"
-            } else {
-                Write-Log "  Office Deployment Tool still running after 20 min - continuing" -Level Info
-            }
-        }
-        catch {
-            Write-Log "  Office Deployment Tool failed: $_" -Level Info
-        }
-    } else {
-        Write-Log "  OfficeSetup.exe or office.xml missing - skipping ODT removal" -Level Info
-    }
-
-    if (-not (Test-OfficeStillInstalled)) {
-        Write-Log "Microsoft 365 removed successfully" -Level Success
-        return
-    }
-
-    # Pass 2: winget (handles locale variants by display name)
-    if (Get-Command winget -ErrorAction SilentlyContinue) {
-        Write-Log "Attempting Office removal via winget..." -Level Info
-        $null = Invoke-NativeCommand winget @('source', 'update', '--disable-interactivity')
-
-        $officeNames = @('Microsoft 365', 'Microsoft Office 365', 'Microsoft Office')
-
-        $wingetListOutput = Invoke-NativeCommand winget @('list', '--name', 'Microsoft 365 - ', '--accept-source-agreements', '--source', 'winget')
-        foreach ($line in $wingetListOutput) {
-            if ($line -match '^\s*(Microsoft 365\s*-\s*[A-Za-z]{2,3}-[A-Za-z]{2,3})\s{2,}') {
-                $variant = $Matches[1].Trim()
-                if ($variant -notin $officeNames) { $officeNames += $variant }
-            }
-        }
-
-        foreach ($officeName in $officeNames) {
-            $null = Invoke-NativeCommand winget @('uninstall', '--name', $officeName, '--silent', '--disable-interactivity', '--accept-source-agreements', '--all-versions')
-            if ($LASTEXITCODE -eq 0) {
-                Write-Log "  Removed '$officeName' via winget" -Level Success
-            }
-        }
-    }
-
-    if (-not (Test-OfficeStillInstalled)) {
-        Write-Log "Microsoft 365 removed successfully" -Level Success
-        return
-    }
-
-    # Pass 3: registry uninstall strings - only ever run silently. A bare Click-to-Run
-    # UninstallString opens Office's interactive wizard and would block the unattended run.
-    Write-Log "Attempting registry-based Office uninstall..." -Level Info
-    foreach ($entry in Get-OfficeUninstallEntries) {
-        $uninst = if ($entry.QuietUninstallString) { $entry.QuietUninstallString } else { $entry.UninstallString }
-        if (-not $uninst) { continue }
-        try {
-            if ($uninst -match '(?i)msiexec') {
-                $guid = [regex]::Match($uninst, '\{[^}]+\}').Value
-                if (-not $guid) { continue }
-                Write-Log "  Running msiexec /x for '$($entry.DisplayName)'"
-                $null = Invoke-NativeCommand msiexec.exe @('/x', $guid, '/quiet', '/norestart')
-            }
-            elseif ($uninst -match '(?i)OfficeClickToRun\.exe') {
-                Write-Log "  Running silent Click-to-Run removal for '$($entry.DisplayName)'"
-                $silent = if ($uninst -match '(?i)DisplayLevel=') { $uninst } else { "$uninst DisplayLevel=False" }
-                $null = Invoke-NativeCommand cmd.exe @('/c', $silent)
-            }
-            else {
-                Write-Log "  No silent uninstall available for '$($entry.DisplayName)' - skipped" -Level Info
-            }
-        }
-        catch {
-            Write-Log "  Uninstaller failed for '$($entry.DisplayName)': $_" -Level Info
-        }
-    }
-
-    if (Test-OfficeStillInstalled) {
-        Write-Log "Microsoft 365 may still be partially installed - manual removal may be needed" -Level Warning -Key warn.officeRemains
-    } else {
-        Write-Log "Microsoft 365 removed successfully" -Level Success
-    }
-}
 
 Function Install-WindowsUpdates {
     <#
@@ -1154,7 +1046,9 @@ Function Install-WingetPackage {
     param(
         [Parameter(Mandatory)][string]$Id,
         [string]$Source = 'winget',
-        [string]$ExtraArgs = ''
+        [string]$ExtraArgs = '',
+        # Already installed: update it (a PC in use, new Outlook preinstalled by Windows)
+        [switch]$Upgrade
     )
     $winget = (Get-Command winget -ErrorAction SilentlyContinue).Source
     if (-not $winget) { return 'failed' }
@@ -1162,7 +1056,22 @@ Function Install-WingetPackage {
     $listArgs = @('list', '--id', $Id, '--exact', '--source', $Source, '--accept-source-agreements', '--disable-interactivity')
     $null = Invoke-NativeCommand winget $listArgs
     if ($LASTEXITCODE -eq 0) {
-        Write-Log "  Already installed: $Id"
+        if (-not $Upgrade) {
+            Write-Log "  Already installed: $Id"
+            return 'installed'
+        }
+        $upgradeArgs = "upgrade --id $Id --exact --source $Source --silent --accept-package-agreements --accept-source-agreements --disable-interactivity"
+        $proc = Start-Process -FilePath $winget -ArgumentList $upgradeArgs -NoNewWindow -PassThru
+        $null = $proc.Handle
+        if (-not $proc.WaitForExit(20 * 60 * 1000)) {
+            $null = Invoke-NativeCommand taskkill @('/T', '/F', '/PID', $proc.Id)
+            Write-Log "  Already installed: $Id (update still running after 20 min - stopped)"
+        } elseif ($proc.ExitCode -eq 0) {
+            Write-Log "  Updated: $Id" -Level Success
+        } else {
+            # 0x8A15002B (-1978335189): no newer version
+            Write-Log "  Already installed: $Id (no update applied, winget exit $($proc.ExitCode))"
+        }
         return 'installed'
     }
 
@@ -1209,12 +1118,17 @@ Function Install-AppPackages {
         if ($entry -and $entry.winget -and $script:WingetReady) {
             $source = if ($entry.wingetSource) { $entry.wingetSource } else { 'winget' }
             foreach ($id in @($entry.winget)) {
-                $result = Install-WingetPackage -Id $id.Replace('{uilang}', $uiLang) -Source $source -ExtraArgs "$($entry.wingetArgs)"
+                $result = Install-WingetPackage -Id $id.Replace('{uilang}', $uiLang) -Source $source -ExtraArgs "$($entry.wingetArgs)" -Upgrade:(-not $SkipUpdates)
                 if ($result -eq 'installed') { $done = $true; break }
                 if ($result -eq 'failed') { break }
             }
         }
         if ($done) { continue }
+        if ($entry -and -not $entry.choco) {
+            # Store-only apps (e.g. new Outlook) have no Chocolatey package
+            Write-Log "'$name' could not be installed with winget" -Level Warning -Key warn.pkgFailed -KeyArgs $name
+            continue
+        }
 
         $chocoId = if ($entry -and $entry.choco) { $entry.choco } else { $name }
         Write-Log "  Falling back to Chocolatey for $name ($chocoId)"
@@ -1287,6 +1201,73 @@ Function Set-NotebookPower {
         if ($LASTEXITCODE -ne 0) { Write-Log "  powercfg $($arguments -join ' ') returned $LASTEXITCODE" }
     }
     Write-Log "Notebook power settings applied (on AC: no sleep, display off after 30 min, lid = do nothing)" -Level Success
+}
+
+Function Test-TaskbarPinSupport {
+    <#
+    .SYNOPSIS
+        Whether Windows applies taskbar pins with PinGeneration (24H2 build 26100.4484 or later)
+    .DESCRIPTION
+        Microsoft: assign PinGeneration only to patched devices, "otherwise the taskbar pins
+        don't apply". A run that installs all updates ends on a current build after its restart.
+    #>
+    $version = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -ErrorAction SilentlyContinue
+    $build = [int]$version.CurrentBuildNumber
+    return ($build -ge 26200) -or ($build -eq 26100 -and [int]$version.UBR -ge 4484) -or (-not $SkipUpdates)
+}
+
+Function Set-TaskbarPins {
+    <#
+    .SYNOPSIS
+        Pin apps to the taskbar once, after the Windows default pins
+    .DESCRIPTION
+        "Start Layout" policy with a taskbar layout XML (Microsoft Learn, taskbar/pinned-apps):
+        applies to the current and every later account at its next sign-in. Without
+        PinListPlacement="Replace" the default pins (Edge, Store, File Explorer) stay and these
+        follow them; PinGeneration="1" applies each pin once, so one the user removes stays
+        removed. Policy values from the local StartMenu.admx. The XML must stay in place and
+        must not contain comments.
+    #>
+    param(
+        [Parameter(Mandatory)][string]$OutputFolder,
+        [string[]]$LinkNames = @()
+    )
+    $programs = Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs'
+    $links = @(foreach ($linkName in $LinkNames) {
+        Get-ChildItem -LiteralPath $programs -Filter $linkName -Recurse -File -ErrorAction SilentlyContinue |
+            Select-Object -First 1 -ExpandProperty FullName
+    })
+    if ($links.Count -eq 0) {
+        Write-Log "Taskbar pins: none of $($LinkNames -join ', ') found in the Start menu - skipped"
+        return
+    }
+    try {
+        $pins = @($links | ForEach-Object {
+            "        <taskbar:DesktopApp DesktopApplicationLinkPath=`"$([System.Security.SecurityElement]::Escape($_))`" PinGeneration=`"1`"/>"
+        })
+        $xml = @(
+            '<?xml version="1.0" encoding="utf-8"?>'
+            '<LayoutModificationTemplate xmlns="http://schemas.microsoft.com/Start/2014/LayoutModification" xmlns:defaultlayout="http://schemas.microsoft.com/Start/2014/FullDefaultLayout" xmlns:start="http://schemas.microsoft.com/Start/2014/StartLayout" xmlns:taskbar="http://schemas.microsoft.com/Start/2014/TaskbarLayout" Version="1">'
+            '  <CustomTaskbarLayoutCollection>'
+            '    <defaultlayout:TaskbarLayout>'
+            '      <taskbar:TaskbarPinList>'
+        ) + $pins + @(
+            '      </taskbar:TaskbarPinList>'
+            '    </defaultlayout:TaskbarLayout>'
+            '  </CustomTaskbarLayoutCollection>'
+            '</LayoutModificationTemplate>'
+        )
+        $xmlPath = Join-Path $OutputFolder 'TaskbarLayout.xml'
+        [System.IO.File]::WriteAllText($xmlPath, ($xml -join "`r`n"), (New-Object System.Text.UTF8Encoding $false))
+        $key = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer'
+        if (-not (Test-Path $key)) { $null = New-Item -Path $key -Force }
+        Set-ItemProperty -Path $key -Name 'LockedStartLayout' -Value 1 -Type DWord -Force
+        Set-ItemProperty -Path $key -Name 'StartLayoutFile' -Value $xmlPath -Type ExpandString -Force
+        Write-Log "Taskbar pins configured ($(($links | ForEach-Object { Split-Path $_ -Leaf }) -join ', '); once per account at its next sign-in)" -Level Success
+    }
+    catch {
+        Write-Log "Taskbar pins could not be configured: $_" -Level Warning -Key warn.taskbarPins -KeyArgs "$_"
+    }
 }
 
 Function Set-StartPins {
@@ -1416,17 +1397,20 @@ Function Invoke-FinalCleanup {
         Leave no installation leftovers: temp folders, recycle bin, Delivery Optimization cache
     .PARAMETER SetupRoot
         The folder this run is executing from - never touched here
+    .PARAMETER KeepRecycleBin
+        Install-only run: the recycle bin holds the customer's deleted files
     #>
-    param([string]$SetupRoot)
+    param([string]$SetupRoot, [switch]$KeepRecycleBin)
     foreach ($folder in @((Join-Path $env:SystemRoot 'Temp'), $env:TEMP)) {
         if (-not $folder -or -not (Test-Path -LiteralPath $folder)) { continue }
         Get-ChildItem -LiteralPath $folder -Force -ErrorAction SilentlyContinue |
             Where-Object { -not $SetupRoot -or $_.FullName.TrimEnd('\') -ine $SetupRoot.TrimEnd('\') } |
             ForEach-Object { Remove-Item -LiteralPath $_.FullName -Recurse -Force -ErrorAction SilentlyContinue }
     }
-    try { Clear-RecycleBin -Force -ErrorAction Stop } catch { }
+    if (-not $KeepRecycleBin) { try { Clear-RecycleBin -Force -ErrorAction Stop } catch { } }
     try { Delete-DeliveryOptimizationCache -Force -ErrorAction Stop } catch { }
-    Write-Log "Temporary files, recycle bin and Delivery Optimization cache cleaned" -Level Success
+    $what = if ($KeepRecycleBin) { 'Temporary files and Delivery Optimization cache' } else { 'Temporary files, recycle bin and Delivery Optimization cache' }
+    Write-Log "$what cleaned" -Level Success
 }
 
 Function Register-SetupFolderCleanup {
@@ -1453,6 +1437,51 @@ Function Register-SetupFolderCleanup {
     catch {
         Write-Log "Could not schedule removal of the setup files: $_"
     }
+}
+
+Function Get-UsedPcSigns {
+    <#
+    .SYNOPSIS
+        Signs that this PC is already in use, as texts for the question before a full setup
+    .DESCRIPTION
+        A log from an earlier run of this tool; 10 or more personal files in an account
+        (Desktop, Documents, Pictures, Videos, Music and OneDrive folders - shortcuts and
+        hidden files don't count); a Windows installation older than 30 days (a feature
+        update resets that date, so it can only add to the other signs).
+    #>
+    # Each sign on its own: one unreadable profile must not hide the others. Directory.Exists,
+    # not Test-Path: under 'Stop', Test-Path throws on a folder this account can't read.
+    $signs = @()
+    $culture = [cultureinfo]::GetCultureInfo(@{ de = 'de-DE'; en = 'en-GB'; it = 'it-IT' }[(Get-UiLanguage)])
+    try {
+        $previous = Get-ChildItem -Path $script:config.logging.logPath -Filter 'setup_*.log' -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -ne $script:LogFile } | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+        if ($previous) { $signs += Get-UiText used.previousRun $previous.LastWriteTime.ToString('d', $culture) }
+    }
+    catch { Write-Log "Used-PC check (earlier runs) skipped: $_" }
+
+    $minFiles = 10
+    $profiles = @(Get-CimInstance Win32_UserProfile -Filter 'Special = FALSE' -ErrorAction SilentlyContinue |
+        Where-Object { $_.LocalPath -and [IO.Directory]::Exists($_.LocalPath) })
+    foreach ($userProfile in $profiles) {
+        try {
+            $folders = @('Desktop', 'Documents', 'Pictures', 'Videos', 'Music' | ForEach-Object { Join-Path $userProfile.LocalPath $_ })
+            $folders += @(Get-ChildItem -LiteralPath $userProfile.LocalPath -Directory -Filter 'OneDrive*' -ErrorAction SilentlyContinue).FullName
+            $found = @($folders | Where-Object { $_ -and [IO.Directory]::Exists($_) } |
+                ForEach-Object { Get-ChildItem -LiteralPath $_ -File -Recurse -ErrorAction SilentlyContinue } |
+                Where-Object { $_.Extension -notin '.lnk', '.url' } | Select-Object -First $minFiles).Count
+            if ($found -ge $minFiles) { $signs += Get-UiText used.files @((Split-Path $userProfile.LocalPath -Leaf), $minFiles) }
+        }
+        catch { Write-Log "Used-PC check skipped $($userProfile.LocalPath): $_" }
+    }
+
+    try {
+        $installDate = (Get-CimInstance Win32_OperatingSystem -ErrorAction Stop).InstallDate
+        $days = [int]((Get-Date) - $installDate).TotalDays
+        if ($days -gt 30) { $signs += Get-UiText used.installDate @($installDate.ToString('d', $culture), $days) }
+    }
+    catch { Write-Log "Used-PC check (install date) skipped: $_" }
+    return $signs
 }
 
 Function New-SetupRestorePoint {
@@ -1499,21 +1528,53 @@ Function Enable-WindowsSudo {
 # MAIN EXECUTION
 # ============================================================================
 
-try {
-    # Step 0: Trial antivirus first - it interferes with installers and keeps Defender passive
-    Write-Log "Step 0: Removing preinstalled antivirus trials (2%)"
-    $script:CurrentStep = 'av'
-    try {
-        Remove-TrialAntivirus
+# The full setup removes Office, OneDrive and desktop shortcuts and turns off BitLocker -
+# on a PC that is already in use, ask first and offer the install-only run instead
+if (-not $InstallOnly) {
+    $usedSigns = @(Get-UsedPcSigns)
+    if ($usedSigns.Count -gt 0) {
+        Write-Log "This PC looks used: $($usedSigns -join '; ')"
+        $choice = Show-SetupResult -Status Warning -Title (Get-UiText used.title) -Subtitle (Get-UiText used.subtitle) `
+            -Heading (Get-UiText used.heading) -Items $usedSigns -Choices @(
+                @{ Key = 'full'; Text = (Get-UiText used.button.full); Fallback = 'No' }
+                @{ Key = 'installOnly'; Text = (Get-UiText used.button.installOnly); Accent = $true; Fallback = 'Yes' }
+                @{ Key = 'cancel'; Text = (Get-UiText used.button.cancel); Cancel = $true; Fallback = 'Cancel' }
+            )
+        switch ($choice) {
+            'installOnly' { $InstallOnly = [switch]$true; Write-Log "Technician chose the install-only run" }
+            'full'        { Write-Log "Technician confirmed the full setup on a PC in use" }
+            default       { Write-Log "Cancelled by the technician - nothing changed"; exit 0 }
+        }
     }
-    catch {
-        Write-Log "Antivirus trial removal failed: $_" -Level Warning -Key warn.avFailed -KeyArgs "$_"
+}
+Write-Log "Mode: $(if ($InstallOnly) { 'install only (nothing is removed)' } else { 'full setup' })"
+
+try {
+    # Install only: the restore point comes first, so the customer's state can be restored
+    if ($InstallOnly) {
+        Write-Log "Creating a restore point before any change..."
+        New-SetupRestorePoint
+    }
+
+    # Step 0: Trial antivirus first - it interferes with installers and keeps Defender passive
+    if (-not $InstallOnly) {
+        Write-Log "Step 0: Removing preinstalled antivirus trials (2%)"
+        $script:CurrentStep = 'av'
+        try {
+            Remove-TrialAntivirus
+        }
+        catch {
+            Write-Log "Antivirus trial removal failed: $_" -Level Warning -Key warn.avFailed -KeyArgs "$_"
+        }
     }
     # Chocolatey is only a fallback; remember whether it was already there so the cleanup
     # at the end removes it only if this run installed it
     $script:ChocoWasPresent = [bool](Get-Command choco -ErrorAction SilentlyContinue)
     $script:WingetReady = Initialize-Winget
     if ($SkipUpdates) { Write-Log "Updates skipped for this run (menu choice / -SkipUpdates)" }
+
+    # Install only: remember the desktop, so Step 5 removes only the installers' new shortcuts
+    if ($InstallOnly) { $desktopBefore = @(Get-DesktopShortcuts | ForEach-Object { $_.FullName }) }
 
     # Step 2: Install software packages - winget first, Chocolatey as fallback
     Write-Log "Step 2: Installing software packages (20%)"
@@ -1555,6 +1616,8 @@ try {
     $registryFiles += "$PSScriptRoot\user_settings.reg"
     # Widgets, Recall/Click to Do, Edge ads, Storage Sense, Fast Startup off (machine)
     $registryFiles += "$PSScriptRoot\machine_settings.reg"
+    # Telemetry and ad ID off - the full run imports it with debloat.ps1, which install only skips
+    if ($InstallOnly) { $registryFiles += "$PSScriptRoot\disable_telemetry.reg" }
 
     $registryValues = @{
         'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize' = @(
@@ -1571,7 +1634,9 @@ try {
         )
     }
 
-    Set-RegistrySettings -RegistryFiles $registryFiles -RegistryValues $registryValues
+    # The theme colors are the customer's own choice on a PC in use; new accounts still get them (Step 11)
+    $currentUserValues = if ($InstallOnly) { @{} } else { $registryValues }
+    Set-RegistrySettings -RegistryFiles $registryFiles -RegistryValues $currentUserValues
 
     # Block potentially unwanted apps (adware bundled with free downloads) in Defender
     try {
@@ -1581,19 +1646,33 @@ try {
     catch {
         Write-Log "Defender PUA protection could not be enabled: $_"
     }
-    Set-NotebookPower
+    if (-not $InstallOnly) { Set-NotebookPower }
     Enable-WindowsSudo
 
-    # Step 5: Remove bloatware shortcuts
+    # Chrome and Firefox go to the taskbar (Step 11) instead of the desktop - if this Windows
+    # can pin them; otherwise their desktop shortcuts stay
+    $taskbarApps = @($script:config.windows.taskbarPins)
+    $taskbarPinsOk = Test-TaskbarPinSupport
+    $keepOnDesktop = if ($taskbarPinsOk) { @() } else { $taskbarApps }
+
+    # Step 5: Remove bloatware shortcuts. Install only: just the shortcuts this run's installers
+    # added to the desktop (not whitelisted); everything the customer had stays
     if (-not $SkipBloatwareRemoval) {
-        Write-Log "Step 5: Removing bloatware (50%)"
         $script:CurrentStep = 'bloat'
-        Remove-BloatwareShortcuts -ShortcutPaths $script:config.windows.shortcuts
-        Clear-DesktopIcons -WhitelistPath "$PSScriptRoot\whitelist.txt"
+        if ($InstallOnly) {
+            Write-Log "Step 5: Removing desktop shortcuts added by the installers (50%)"
+            Clear-DesktopIcons -WhitelistPath "$PSScriptRoot\whitelist.txt" -Keep $desktopBefore -ExtraWhitelist $keepOnDesktop
+        } else {
+            Write-Log "Step 5: Removing bloatware (50%)"
+            Remove-BloatwareShortcuts -ShortcutPaths $script:config.windows.shortcuts
+            Clear-DesktopIcons -WhitelistPath "$PSScriptRoot\whitelist.txt" -ExtraWhitelist $keepOnDesktop
+        }
     }
 
-    # Step 6: Disable BitLocker if needed
-    if ($bitlockerStatus.IsEncrypted) {
+    # Step 6: Disable BitLocker if needed (never on a PC in use)
+    if ($bitlockerStatus.IsEncrypted -and $InstallOnly) {
+        Write-Log "BitLocker stays on (install only)"
+    } elseif ($bitlockerStatus.IsEncrypted) {
         Write-Log "Step 6: Disabling BitLocker (60%)"
         $script:CurrentStep = 'bitlocker'
         try {
@@ -1644,35 +1723,40 @@ try {
         }
     }
 
-    # Step 9: Uninstall Office
-    Write-Log "Step 9: Uninstalling Office (80%)"
-    $script:CurrentStep = 'office'
-    Uninstall-Microsoft365
+    # Steps 9-10 remove things - full run only
+    if (-not $InstallOnly) {
+        # Step 9: Uninstall Office
+        Write-Log "Step 9: Uninstalling Office (80%)"
+        $script:CurrentStep = 'office'
+        Uninstall-Microsoft365
 
-    # Step 10: Run debloat script
-    Write-Log "Step 10: Running debloat script (90%)"
-    $script:CurrentStep = 'debloat'
-    if (Test-Path "$PSScriptRoot\debloat.ps1") {
-        try {
-            & "$PSScriptRoot\debloat.ps1"
+        # Step 10: Run debloat script
+        Write-Log "Step 10: Running debloat script (90%)"
+        $script:CurrentStep = 'debloat'
+        if (Test-Path "$PSScriptRoot\debloat.ps1") {
+            try {
+                # Store apps the profile installs on purpose (e.g. new Outlook) are not removed
+                $keepApps = @($deploymentConfig.packages | ForEach-Object { $script:config.packageCatalog[$_].appx } | Where-Object { $_ })
+                & "$PSScriptRoot\debloat.ps1" -KeepApps $keepApps
+            }
+            catch {
+                Write-Log "Debloat script failed: $_" -Level Warning -Key warn.debloat -KeyArgs "$_"
+            }
         }
-        catch {
-            Write-Log "Debloat script failed: $_" -Level Warning -Key warn.debloat -KeyArgs "$_"
-        }
-    }
 
-    # Re-apply OEM branding after debloat - Lenovo/HP/Dell services can reset
-    # OEMInformation while their software is still running during earlier steps.
-    if ($deploymentConfig.branded) {
-        $brandingReg = "$PSScriptRoot\Logo_Info.reg"
-        if (Test-Path $brandingReg) {
-            Write-Log "Re-applying OEM branding registry..."
-            # reg.exe reports success on stderr, so a plain 2>&1 under 'Stop' threw on every run
-            $out = Invoke-NativeCommand "$env:SystemRoot\System32\reg.exe" @('import', $brandingReg)
-            if ($LASTEXITCODE -eq 0) {
-                Write-Log "OEM branding applied" -Level Success
-            } else {
-                Write-Log "OEM branding registry warning: $($out -join ' ')" -Level Warning -Key warn.branding -KeyArgs ($out -join ' ')
+        # Re-apply OEM branding after debloat - Lenovo/HP/Dell services can reset
+        # OEMInformation while their software is still running during earlier steps.
+        if ($deploymentConfig.branded) {
+            $brandingReg = "$PSScriptRoot\Logo_Info.reg"
+            if (Test-Path $brandingReg) {
+                Write-Log "Re-applying OEM branding registry..."
+                # reg.exe reports success on stderr, so a plain 2>&1 under 'Stop' threw on every run
+                $out = Invoke-NativeCommand "$env:SystemRoot\System32\reg.exe" @('import', $brandingReg)
+                if ($LASTEXITCODE -eq 0) {
+                    Write-Log "OEM branding applied" -Level Success
+                } else {
+                    Write-Log "OEM branding registry warning: $($out -join ' ')" -Level Warning -Key warn.branding -KeyArgs ($out -join ' ')
+                }
             }
         }
     }
@@ -1690,13 +1774,23 @@ try {
     # (UCPD driver, UserChoiceLatest) - the result window reminds the technician instead.
     Write-Log "Step 11: Applying settings for new user accounts, Start pins, wallpaper (95%)"
     $script:CurrentStep = 'newUsers'
-    Set-DefaultUserProfile -RegFiles @("$PSScriptRoot\icons.reg", "$PSScriptRoot\user_settings.reg", "$PSScriptRoot\disable_telemetry.reg") `
-        -Values $registryValues
+    $defaultProfileFiles = @("$PSScriptRoot\icons.reg", "$PSScriptRoot\user_settings.reg", "$PSScriptRoot\disable_telemetry.reg")
+    # OneDrive was uninstalled (debloat) - keep new accounts from installing it again
+    if (-not $InstallOnly) { $defaultProfileFiles += "$PSScriptRoot\onedrive_setup_off.reg" }
+    Set-DefaultUserProfile -RegFiles $defaultProfileFiles -Values $registryValues
     Set-NewUserDefaultApps -AssocFile "$PSScriptRoot\assoc.txt" -OutputFolder $installFolder
-    Set-StartPins -OutputFolder $installFolder -IncludeLibreOffice ($deploymentConfig.packages -contains 'libreoffice') `
-        -HelpdeskExe $helpdeskDest
+    # The pin policy applies to every account once - on a PC in use it would replace the customer's pins
+    if (-not $InstallOnly) {
+        Set-StartPins -OutputFolder $installFolder -IncludeLibreOffice ($deploymentConfig.packages -contains 'libreoffice') `
+            -HelpdeskExe $helpdeskDest
+        $script:ResultNotes = @(Get-UiText result.note.defaultApps)
+    }
+    if ($taskbarPinsOk) {
+        Set-TaskbarPins -OutputFolder $installFolder -LinkNames $taskbarApps
+    } else {
+        Write-Log "Taskbar pins need Windows 11 24H2 build 26100.4484 or later - skipped; $($taskbarApps -join ', ') stay on the desktop"
+    }
     Register-BingWallpaper -InstallFolder $installFolder
-    $script:ResultNotes = @(Get-UiText result.note.defaultApps)
 
     # Step 12: Health checks reported in the result window
     Write-Log "Step 12: Checking activation, Defender and edition (96%)"
@@ -1710,78 +1804,81 @@ try {
     if (-not $SkipUpdates) { Invoke-ComponentCleanup }
     Remove-ChocolateyIfInstalledByUs -WasPresent $script:ChocoWasPresent
     $setupRoot = Split-Path $PSScriptRoot -Parent
-    Invoke-FinalCleanup -SetupRoot $setupRoot
+    Invoke-FinalCleanup -SetupRoot $setupRoot -KeepRecycleBin:$InstallOnly
     Register-SetupFolderCleanup -SetupRoot $setupRoot
-    New-SetupRestorePoint
+    if (-not $InstallOnly) { New-SetupRestorePoint }
 
-    # Final: Stop Explorer, write icon layout to registry, then restart Explorer.
-    # The registry write MUST happen while Explorer is dead - otherwise Explorer
-    # overwrites IconLayouts with the current layout on shutdown.
-    Write-Log "Finalizing... (98%)"
-    $script:CurrentStep = 'finalize'
-    $explorerKey = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon'
-    $originalShell = (Get-ItemProperty -Path $explorerKey -Name Shell -ErrorAction SilentlyContinue).Shell
-    $shellBlanked = $false
-    try {
-        # Prevent Windows from auto-restarting Explorer after we kill it
-        Set-ItemProperty -Path $explorerKey -Name Shell -Value '' -Force
-        $shellBlanked = $true
-
-        # Wait-Process is unreliable if Win11 auto-restarts Explorer before we write the registry.
-        Stop-ProcessWithTimeout -Name 'explorer' -TimeoutSeconds 15
-
-        $desktopRegFile = if ($deploymentConfig.packages -contains "libreoffice") {
-            "$PSScriptRoot\desktop_libreoffice.reg"
-        } else {
-            "$PSScriptRoot\desktop.reg"
-        }
-        if (Test-Path $desktopRegFile) {
-            Write-Log "Applying desktop icon layout ($desktopRegFile)..."
-            Set-RegistrySettings -RegistryFiles @($desktopRegFile) -RegistryValues @{}
-            Write-Log "Desktop icon layout applied" -Level Success
-        } else {
-            Write-Log "Desktop reg file not found: $desktopRegFile" -Level Warning -Key warn.layoutMissing -KeyArgs (Split-Path $desktopRegFile -Leaf)
-        }
-    }
-    catch {
-        Write-Log "Explorer restart failed: $_" -Level Warning -Key warn.explorer -KeyArgs "$_"
-    }
-    finally {
-        # Always restore the shell, whatever happened above: an empty Shell value leaves
-        # every user without a desktop at the next logon
-        if ($shellBlanked) {
-            try {
-                $shellValue = if ($originalShell) { $originalShell } else { 'explorer.exe' }
-                Set-ItemProperty -Path $explorerKey -Name Shell -Value $shellValue -Force
-            }
-            catch {
-                Write-Log "Could not restore the Winlogon Shell value: $_" -Level Error -Key warn.explorer -KeyArgs "$_"
-            }
-        }
-
-        # Start Explorer as the logged-in user (not elevated) so it properly becomes the shell.
-        # Start-Process from an admin session would launch it elevated, which Windows rejects as shell.
+    # Install only leaves the customer's desktop layout and Explorer alone
+    if (-not $InstallOnly) {
+        # Final: Stop Explorer, write icon layout to registry, then restart Explorer.
+        # The registry write MUST happen while Explorer is dead - otherwise Explorer
+        # overwrites IconLayouts with the current layout on shutdown.
+        Write-Log "Finalizing... (98%)"
+        $script:CurrentStep = 'finalize'
+        $explorerKey = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon'
+        $originalShell = (Get-ItemProperty -Path $explorerKey -Name Shell -ErrorAction SilentlyContinue).Shell
+        $shellBlanked = $false
         try {
-            $shellUser = (Get-CimInstance -ClassName Win32_ComputerSystem).UserName
-            if ($shellUser) {
-                $explorerAction    = New-ScheduledTaskAction -Execute 'C:\Windows\explorer.exe'
-                $explorerPrincipal = New-ScheduledTaskPrincipal -UserId $shellUser -LogonType Interactive -RunLevel Limited
-                $explorerSettings  = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes 1) -Priority 4
-                try {
-                    Register-ScheduledTask -TaskName 'GKScript-StartExplorer' -Action $explorerAction `
-                        -Settings $explorerSettings -Principal $explorerPrincipal -Force | Out-Null
-                    Start-ScheduledTask -TaskName 'GKScript-StartExplorer'
-                    Start-Sleep -Seconds 2
-                }
-                finally {
-                    Unregister-ScheduledTask -TaskName 'GKScript-StartExplorer' -Confirm:$false -ErrorAction SilentlyContinue
-                }
-            } elseif (-not (Get-Process explorer -ErrorAction SilentlyContinue)) {
-                Start-Process explorer.exe
+            # Prevent Windows from auto-restarting Explorer after we kill it
+            Set-ItemProperty -Path $explorerKey -Name Shell -Value '' -Force
+            $shellBlanked = $true
+
+            # Wait-Process is unreliable if Win11 auto-restarts Explorer before we write the registry.
+            Stop-ProcessWithTimeout -Name 'explorer' -TimeoutSeconds 15
+
+            $desktopRegFile = if ($deploymentConfig.packages -contains "libreoffice") {
+                "$PSScriptRoot\desktop_libreoffice.reg"
+            } else {
+                "$PSScriptRoot\desktop.reg"
+            }
+            if (Test-Path $desktopRegFile) {
+                Write-Log "Applying desktop icon layout ($desktopRegFile)..."
+                Set-RegistrySettings -RegistryFiles @($desktopRegFile) -RegistryValues @{}
+                Write-Log "Desktop icon layout applied" -Level Success
+            } else {
+                Write-Log "Desktop reg file not found: $desktopRegFile" -Level Warning -Key warn.layoutMissing -KeyArgs (Split-Path $desktopRegFile -Leaf)
             }
         }
         catch {
             Write-Log "Explorer restart failed: $_" -Level Warning -Key warn.explorer -KeyArgs "$_"
+        }
+        finally {
+            # Always restore the shell, whatever happened above: an empty Shell value leaves
+            # every user without a desktop at the next logon
+            if ($shellBlanked) {
+                try {
+                    $shellValue = if ($originalShell) { $originalShell } else { 'explorer.exe' }
+                    Set-ItemProperty -Path $explorerKey -Name Shell -Value $shellValue -Force
+                }
+                catch {
+                    Write-Log "Could not restore the Winlogon Shell value: $_" -Level Error -Key warn.explorer -KeyArgs "$_"
+                }
+            }
+
+            # Start Explorer as the logged-in user (not elevated) so it properly becomes the shell.
+            # Start-Process from an admin session would launch it elevated, which Windows rejects as shell.
+            try {
+                $shellUser = (Get-CimInstance -ClassName Win32_ComputerSystem).UserName
+                if ($shellUser) {
+                    $explorerAction    = New-ScheduledTaskAction -Execute 'C:\Windows\explorer.exe'
+                    $explorerPrincipal = New-ScheduledTaskPrincipal -UserId $shellUser -LogonType Interactive -RunLevel Limited
+                    $explorerSettings  = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes 1) -Priority 4
+                    try {
+                        Register-ScheduledTask -TaskName 'GKScript-StartExplorer' -Action $explorerAction `
+                            -Settings $explorerSettings -Principal $explorerPrincipal -Force | Out-Null
+                        Start-ScheduledTask -TaskName 'GKScript-StartExplorer'
+                        Start-Sleep -Seconds 2
+                    }
+                    finally {
+                        Unregister-ScheduledTask -TaskName 'GKScript-StartExplorer' -Confirm:$false -ErrorAction SilentlyContinue
+                    }
+                } elseif (-not (Get-Process explorer -ErrorAction SilentlyContinue)) {
+                    Start-Process explorer.exe
+                }
+            }
+            catch {
+                Write-Log "Explorer restart failed: $_" -Level Warning -Key warn.explorer -KeyArgs "$_"
+            }
         }
     }
 
@@ -1794,7 +1891,8 @@ try {
     if ($issues.Count -eq 0) {
         Write-Log "=== Setup Completed Successfully ===" -Level Success
         Write-Log "Log file: $($script:LogFile)"
-        Show-SetupResult -Status Success -Title (Get-UiText result.success.title) -Subtitle (Get-RunSummary) `
+        $successTitle = if ($InstallOnly) { Get-UiText result.installOnly.title } else { Get-UiText result.success.title }
+        Show-SetupResult -Status Success -Title $successTitle -Subtitle (Get-RunSummary) `
             -LogFile $script:LogFile -RebootRequired:([bool]$script:RebootRequired) -Notes @($script:ResultNotes)
     } else {
         Write-Log "=== Setup Finished With $($issues.Count) Warning(s) ===" -Level Success
