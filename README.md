@@ -166,6 +166,9 @@ src/
 
 ## Changelog
 
+### Unreleased
+- MIT license, third-party notices for the menu module and Win11Debloat (shipped in the exe)
+
 ### v2.2.1 — 2026-10-05
 - Screenshots in the README and on the release pages
 - Report: "none" in the same size as the lists
@@ -250,3 +253,11 @@ src/
 
 ### v1.0.0
 - Initial release
+
+## License
+
+[MIT](LICENSE) - Copyright (c) 2023-2026 Netixx GmbH / Srl (Netixx IT Solutions). Provided "as is", without warranty of any kind: the tool uninstalls software and turns off BitLocker - test it before you use it.
+
+Not covered by the license: the Netixx name, logo and icon (`src/netixx.ico`), the Netixx Helpdesk configuration and the Netixx contact details in `src/Logo_Info.reg`. Don't use them to brand a derived tool.
+
+Third-party code (menu module, Win11Debloat app list and registry values) is MIT-licensed as well; see [src/THIRD-PARTY-NOTICES.txt](src/THIRD-PARTY-NOTICES.txt).

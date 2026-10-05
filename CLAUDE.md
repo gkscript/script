@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **gk-script** ("Netixx Grundkonfiguration") is a Windows 11 deployment tool for Netixx IT Solutions. It automates first-time PC setup: package installation, GPU drivers, Office 365 removal, OEM branding, registry customization and bloat removal, across three deployment profiles. It ships as a single NSIS-built `.exe` that opens a WPF button menu.
 
+License: MIT (`LICENSE`, Netixx GmbH / Srl); the Netixx brand assets are excluded (README). Code taken from other projects needs its notice in `src/THIRD-PARTY-NOTICES.txt` - that file ships inside the exe.
+
 `tests/Test-Repository.ps1` runs the static checks that caught real bugs: every script parses in Windows PowerShell 5.1, no non-ASCII inside strings, no BOM, XAML well-formed, the three language files have the same keys and every key the code uses exists, config/gui.csv consistent, .reg files UTF-16 LE or ASCII. GitHub Actions (`.github/workflows/ci.yml`) runs it on every push in Windows PowerShell 5.1 and builds a test exe (artifact). Behaviour itself can only be verified by running on a real or VM Windows machine as admin, then checking the log.
 
 ## Build
