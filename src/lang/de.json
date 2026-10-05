@@ -107,7 +107,6 @@
   "warn.debloat": "Windows-Bereinigung fehlgeschlagen: {0}",
   "warn.branding": "OEM-Branding konnte nicht erneut gesetzt werden: {0}",
   "warn.oneDrive": "OneDrive konnte nicht deinstalliert werden ({0})",
-  "warn.layoutMissing": "Desktop-Layoutdatei fehlt: {0}",
   "warn.explorer": "Explorer konnte nicht neu gestartet werden: {0}",
   "warn.timeSync": "Zeitsynchronisierung fehlgeschlagen: {0}",
   "warn.gpuDetect": "Grafikkarte konnte nicht erkannt werden: {0}",
@@ -128,5 +127,6 @@
   "warn.wallpaper": "Tägliches Bing-Hintergrundbild konnte nicht eingerichtet werden: {0}",
   "warn.taskbarPins": "Taskleisten-Pins konnten nicht gesetzt werden: {0}",
   "warn.officeInstall": "{0} konnte nicht installiert werden (Code {1}).",
-  "warn.officeTimeout": "Die Office-Installation lief nach 60 Minuten noch und wurde abgebrochen."
+  "warn.officeTimeout": "Die Office-Installation lief nach 60 Minuten noch und wurde abgebrochen.",
+  "warn.officeDownload": "Der Office-Installer konnte nicht von Microsoft geladen werden."
 }

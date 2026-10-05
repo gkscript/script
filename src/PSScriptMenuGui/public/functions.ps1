@@ -38,8 +38,6 @@ Function Show-ScriptMenuGui {
         See CSV reference: https://github.com/weebsnore/PowerShell-Script-Menu-Gui
     .EXAMPLE
         Show-ScriptMenuGui -csvPath '.\example_data.csv' -Verbose
-    .NOTES
-        Run New-ScriptMenuGuiExample to get some example files
     .LINK
         https://github.com/weebsnore/PowerShell-Script-Menu-Gui
     #>
@@ -98,9 +96,7 @@ Function Show-ScriptMenuGui {
     }
 
     # Build complete XAML from template files, with the shared gk-script theme injected
-    $xamlStart = Get-Content "$moduleRoot\xaml\start.xaml" -Raw -Encoding UTF8
-    $xamlEnd = Get-Content "$moduleRoot\xaml\end.xaml" -Raw -Encoding UTF8
-    $xaml = Get-ThemedXaml ($xamlStart + $xamlEnd)
+    $xaml = Get-ThemedXaml (Get-Content "$moduleRoot\xaml\start.xaml" -Raw -Encoding UTF8)
 
     Write-Verbose 'Creating XAML objects...'
     $form = New-GuiForm -inputXml $xaml
@@ -164,27 +160,3 @@ Function Show-ScriptMenuGui {
     $Form.ShowDialog() | Out-Null
 }
 
-Function New-ScriptMenuGuiExample {
-    <#
-    .SYNOPSIS
-        Creates an example set of files for PSScriptMenuGui
-    .PARAMETER path
-        Path of output folder
-    .EXAMPLE
-        New-ScriptMenuGuiExample -path 'PSScriptMenuGui_example'
-    .LINK
-        https://github.com/weebsnore/PowerShell-Script-Menu-Gui
-    #>
-    [CmdletBinding()]
-    param (
-        [string]$path = 'PSScriptMenuGui_example'
-    )
-
-    # Ensure folder exists
-    if (-not (Test-Path -Path $path -PathType Container) ) {
-        New-Item -Path $path -ItemType 'directory' -Verbose | Out-Null
-    }
-
-    Write-Verbose "Copying example files to $path..." -Verbose
-    Copy-Item -Path "$moduleRoot\examples\*" -Destination $path
-}

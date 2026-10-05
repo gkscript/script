@@ -88,6 +88,10 @@ Set-KeepAwake -Enable
 try {
     $workFolder = Join-Path $env:TEMP 'NetixxOffice'
     $setup = Get-OfficeSetup -Url $config.office.setupUrl -Folder $workFolder
+    if (-not $setup) {
+        Write-Log "The Office installer could not be downloaded from Microsoft" -Level Warning -Key warn.officeDownload
+        throw "Office setup not available"
+    }
 
     # Two Office suites side by side aren't supported: remove any other one first. Add-ons
     # (proofing tools, language packs) don't count; the same product is just updated.

@@ -1,8 +1,6 @@
 {
   "logging": {
-    "enabled": true,
-    "logPath": "C:\\Logs\\PSScriptSetup",
-    "logLevel": "Info"
+    "logPath": "C:\\Logs\\PSScriptSetup"
   },
   "deployment": {
     "business": {
@@ -38,7 +36,6 @@
     "installFolder": "C:\\Install"
   },
   "windows": {
-    "deleteUnwantedShortcuts": true,
     "shortcuts": [
       "C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\Angebote.lnk",
       "C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\Firefox Privater Modus.lnk",
@@ -53,7 +50,7 @@
     "taskbarPins": ["Google Chrome.lnk", "Firefox.lnk"]
   },
   "office": {
-    "_comment": "office.ps1 (own menu item). The product must match the customer's licence - Microsoft: 'If you use the wrong product ID, you can't activate Office' (Learn: Product IDs supported by the ODT). oneDrive: the subscription includes OneDrive storage. setupUrl: the current ODT setup.exe (signature-checked; the bundled OfficeSetup.exe is the fallback).",
+    "_comment": "office.ps1 (own menu item). The product must match the customer's licence - Microsoft: 'If you use the wrong product ID, you can't activate Office' (Learn: Product IDs supported by the ODT). oneDrive: the subscription includes OneDrive storage. setupUrl: the current ODT setup.exe, downloaded and signature-checked for each run (also used by the full run's Office removal).",
     "setupUrl": "https://officecdn.microsoft.com/pr/wsus/setup.exe",
     "products": [
       { "key": "m365business",     "productId": "O365BusinessRetail",     "oneDrive": true },
@@ -65,8 +62,6 @@
     "proofingLanguages": ["de-de", "it-it"]
   },
   "validation": {
-    "requireInternet": true,
-    "requireAdmin": true,
     "minDiskSpace": 5000000000
   }
 }

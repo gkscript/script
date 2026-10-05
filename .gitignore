@@ -15,3 +15,6 @@ desktop.ini
 
 # Impeccable design-review screenshots (local only)
 .impeccable/review/
+
+# Personal Claude Code settings
+.claude/settings.local.json

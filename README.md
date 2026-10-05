@@ -1,6 +1,6 @@
 # gk-script
 
-Windows enterprise deployment tool for Netixx IT Solutions. Automates full system setup — software installation, GPU drivers, Office removal, OEM branding, registry tweaks, and bloatware removal — across three deployment profiles. Ships as a self-contained `.exe` with a WPF GUI menu.
+Windows 11 setup tool for Netixx IT Solutions. Automates the first-time setup of a customer PC — software, Windows updates and drivers, OEM branding, Windows settings, bloatware removal — across three profiles, plus an install-only mode for PCs already in use and a separate Microsoft Office installation. Ships as a self-contained `.exe` with a WPF menu.
 
 ## Requirements
 
@@ -10,7 +10,7 @@ Windows enterprise deployment tool for Netixx IT Solutions. Automates full syste
 
 ## Deploy
 
-Copy `gk-script.exe` to the target machine and double-click it. UAC elevation is handled automatically.
+Download the latest `gk-script.exe` from [Releases](https://github.com/gkscript/script/releases/latest) (direct link: <https://github.com/gkscript/script/releases/latest/download/gk-script.exe>), copy it to the target machine and double-click it. UAC elevation is handled automatically.
 
 The menu opens in German. Switch to English or Italian with **DE · EN · IT** in the top-right corner; the result window follows that choice.
 
@@ -26,12 +26,12 @@ The menu opens in German. Switch to English or Italian with **DE · EN · IT** i
 
 Packages come from winget (vendor installers, hash-checked); Chocolatey is only a fallback and is removed afterwards.
 
-All profiles include: all Windows updates (switchable in the menu), Office 365 uninstall, OEM branding, Netixx Helpdesk, bloatware/UWP removal (incl. Samsung Galaxy apps), OneDrive uninstalled, Windows suggestions/ads off, clean Start pins, daily Bing wallpaper, default apps for new accounts, desktop layout, cleanup and a restore point.
+All profiles include: all Windows updates (switchable in the menu), Office 365 uninstall, OEM branding, Netixx Helpdesk, bloatware/UWP removal (incl. Samsung Galaxy apps), OneDrive uninstalled, Windows suggestions/ads off, clean Start pins, Chrome and Firefox on the taskbar, daily Bing wallpaper, default apps for new accounts, cleanup and a restore point.
 
 ## Two modes
 
 - **Full setup** (default) for a new PC: everything below.
-- **Install only** (menu switch "Nur nachinstallieren", `-InstallOnly`) for a PC already in use: apps, Helpdesk, OEM info, Netixx settings, updates and the Bing wallpaper. Nothing is removed or turned off: no antivirus/Office/OneDrive removal, no debloat, no desktop cleanup or layout, no BitLocker change, no Start pins, the recycle bin stays. Only the desktop shortcuts the installers just added go. A restore point is created first.
+- **Install only** (menu switch "Nur nachinstallieren", `-InstallOnly`) for a PC already in use: apps, Helpdesk, OEM info, Netixx settings, updates and the Bing wallpaper. Nothing is removed or turned off: no antivirus/Office/OneDrive removal, no debloat, no desktop cleanup, no BitLocker change, no Start pins, the recycle bin stays. Only the desktop shortcuts the installers just added go. A restore point is created first.
 - A full run on a PC that looks used (an earlier run, personal files, Windows older than 30 days) asks first and offers install only.
 
 ## What it does (in order)
@@ -49,14 +49,14 @@ All profiles include: all Windows updates (switchable in the menu), Office 365 u
 11. Prepare accounts created later (the customer's): Default profile settings, default apps via DISM; clean Start pins and Chrome/Firefox on the taskbar after the default pins (both applied once, instead of desktop icons); daily Bing wallpaper (4K) for every account
 12. Health checks: activation, Defender, edition vs. profile
 13. Clean up: update leftovers (DISM), Chocolatey, temp files, recycle bin; setup files removed at the next start; restore point
-14. Apply desktop icon layout, restart Explorer
+14. Restart Explorer, so the new settings show without signing out
 15. Show the result window: green done / yellow warnings / red failed, warnings listed, restart button when needed, reminder to confirm default apps for the current account
 
 The PC and display are kept awake for the whole run, so the result is on screen when you come back.
 
 ## Logs
 
-All operations log to `C:\Logs\PSScriptSetup\setup_YYYYMMDD_HHmmss.log`.
+Setup runs log to `C:\Logs\PSScriptSetup\setup_YYYYMMDD_HHmmss.log`, Office installs to `office_YYYYMMDD_HHmmss.log` in the same folder.
 
 ```powershell
 # Open the latest log
@@ -89,10 +89,13 @@ powershell -ExecutionPolicy Bypass -File src\main.ps1 -DeploymentType consumer-n
 # Optional flags
 -SkipUpdates            # No Windows Update and no app updates
 -InstallOnly            # PC already in use: install and configure, remove nothing
--SkipBloatwareRemoval   # Skip bloat/shortcut cleanup
--SkipHideConsole        # Keep the console window visible
+-SkipBloatwareRemoval   # Skip the shortcut and desktop cleanup (debloat still runs)
 -ConfigPath <path>      # Use alternate config.json
--Language de|en|it     # Result window language (default: de)
+-Language de|en|it      # Window language (default: de)
+
+# Install Microsoft Office (asks for the product unless -Product is given)
+powershell -ExecutionPolicy Bypass -File src\office.ps1
+powershell -ExecutionPolicy Bypass -File src\office.ps1 -Product m365business   # or homebusiness2024, home2024, m365home
 ```
 
 ## Project structure
@@ -102,7 +105,8 @@ gk-script.exe           ← self-contained deployment exe
 launch.bat              → UAC elevation → PowerShell GUI
 build.ps1               → builds gk-script.exe via NSIS
 src/
-├── main.ps1            → main orchestration script
+├── main.ps1            → setup run (profiles, full / install only)
+├── office.ps1          → Microsoft Office installation (own menu item)
 ├── config.json         → deployment profiles, package catalog (winget/Chocolatey IDs), paths
 ├── gui.csv             → WPF menu button definitions
 ├── debloat.ps1         → UWP + Win32 bloat removal, telemetry disable
@@ -111,6 +115,7 @@ src/
 ├── lang/               → UI texts (de, en, it)
 ├── lib/
 │   ├── PSSetupUtility.psm1   → shared utilities (logging, pre-flight, result window)
+│   ├── Office.ps1            → Office removal, current installer, install configuration
 │   ├── Theme.xaml            → shared look of all windows
 │   ├── WindowTheme.ps1       → theme loader, Mica, title-bar color
 │   ├── Language.ps1          → UI language and text lookup
@@ -123,12 +128,19 @@ src/
 - **Packages**: edit `src/config.json` — `packages` per profile; winget/Chocolatey IDs in `packageCatalog`
 - **Bloat exclusions / OEM keep-list**: edit `$excluded` in `src/debloat.ps1`; extra removals in `$oemAndExtras` / `$win32Bloat`
 - **Desktop icons to keep**: edit `src/whitelist.txt`
+- **Taskbar pins**: `windows.taskbarPins` in `src/config.json` (Start-menu shortcut names)
+- **Office products**: `office` in `src/config.json` — product IDs, OneDrive per product, excluded apps, proofing languages
 - **OEM branding**: edit `src/Logo_Info.reg` (Windows 11 shows the support texts; it no longer displays an OEM logo)
 - **Menu buttons**: edit `src/gui.csv` (`Icon` = Segoe Fluent Icons code, e.g. `E821`)
 - **Window look**: edit `src/lib/Theme.xaml` (rules in `DESIGN.md`)
 - **Texts / translations**: edit `src/lang/de.json`, `en.json`, `it.json` (same keys in all three)
 
 ## Changelog
+
+### v2.1.1 — 2026-10-05
+- Cleanup: no desktop icon layout any more (the captured layout files were stale), so the end of the run no longer blanks the Winlogon shell - Explorer is simply restarted
+- The bundled Office setup (7.4 MB) is gone: the current installer is always downloaded from Microsoft; the exe shrinks accordingly
+- Removed unused code, config switches that did nothing (`logging.enabled`, `validation.requireAdmin`, ...) and the `-SkipHideConsole` parameter
 
 ### v2.1.0 — 2026-10-05
 - Microsoft Office as its own menu item: Microsoft 365 Business, Home & Business 2024, Home 2024 or Microsoft 365 Family/Personal, with the current installer from Microsoft, German/Italian proofing, classic and new Outlook

@@ -107,7 +107,6 @@
   "warn.debloat": "Windows cleanup failed: {0}",
   "warn.branding": "OEM branding could not be re-applied: {0}",
   "warn.oneDrive": "OneDrive could not be uninstalled ({0})",
-  "warn.layoutMissing": "Desktop layout file not found: {0}",
   "warn.explorer": "Explorer restart failed: {0}",
   "warn.timeSync": "System time synchronization failed: {0}",
   "warn.gpuDetect": "Could not detect the graphics card: {0}",
@@ -128,5 +127,6 @@
   "warn.wallpaper": "Daily Bing wallpaper could not be set up: {0}",
   "warn.taskbarPins": "Taskbar pins could not be set: {0}",
   "warn.officeInstall": "{0} could not be installed (code {1}).",
-  "warn.officeTimeout": "The Office installation was still running after 60 minutes and was stopped."
+  "warn.officeTimeout": "The Office installation was still running after 60 minutes and was stopped.",
+  "warn.officeDownload": "The Office installer could not be downloaded from Microsoft."
 }

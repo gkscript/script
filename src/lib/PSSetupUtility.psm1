@@ -184,29 +184,6 @@ Function Test-PrerequisiteDiskSpace {
     }
 }
 
-Function Test-WindowsVersion {
-    <#
-    .SYNOPSIS
-        Get Windows version information
-    #>
-    try {
-        $os = Get-CimInstance -ClassName Win32_OperatingSystem -ErrorAction Stop
-        $systemInfo = @{
-            OSCaption = $os.Caption
-            Version = $os.Version
-            BuildNumber = $os.BuildNumber
-            Is11 = $os.Caption -match "Windows 11"
-            Arch = $env:PROCESSOR_ARCHITECTURE
-        }
-        Write-Log "Windows version: $($systemInfo.OSCaption) (Build $($systemInfo.BuildNumber))"
-        return $systemInfo
-    }
-    catch {
-        Write-Log "Failed to retrieve Windows version: $_" -Level Error
-        throw
-    }
-}
-
 Function Get-SystemGPU {
     <#
     .SYNOPSIS
@@ -638,41 +615,6 @@ Function Get-UninstallEntries {
         Where-Object { $_.DisplayName -and -not $_.SystemComponent }
 }
 
-Function Invoke-SafeProcess {
-    <#
-    .SYNOPSIS
-        Safely execute a process with error handling and logging
-    #>
-    param(
-        [Parameter(Mandatory)]
-        [string]$FilePath,
-        
-        [string[]]$ArgumentList,
-        
-        [string]$Description = "Process execution"
-    )
-    
-    try {
-        Write-Log "Starting: $Description"
-        Write-Verbose "FilePath: $FilePath"
-        Write-Verbose "Arguments: $($ArgumentList -join ' ')"
-        
-        $process = Start-Process -FilePath $FilePath -ArgumentList $ArgumentList -Wait -PassThru -ErrorAction Stop
-        
-        if ($process.ExitCode -eq 0) {
-            Write-Log "$Description completed successfully" -Level Success
-            return $true
-        } else {
-            Write-Log "$Description failed with exit code $($process.ExitCode)" -Level Error
-            return $false
-        }
-    }
-    catch {
-        Write-Log "Failed to execute $Description : $_" -Level Error
-        throw
-    }
-}
-
 Export-ModuleMember -Function @(
     'Initialize-Logging'
     'Write-Log'
@@ -686,10 +628,8 @@ Export-ModuleMember -Function @(
     'Test-PrerequisiteInternet'
     'Sync-SystemTimeWithInternet'
     'Test-PrerequisiteDiskSpace'
-    'Test-WindowsVersion'
     'Get-SystemGPU'
     'Get-BitlockerStatus'
-    'Invoke-SafeProcess'
     'Invoke-NativeCommand'
     'Invoke-SilentUninstall'
     'Restart-In64BitPowerShell'

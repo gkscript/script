@@ -7,9 +7,6 @@ param(
     [switch]$SkipBloatwareRemoval,
     
     [Parameter()]
-    [switch]$SkipHideConsole,
-    
-    [Parameter()]
     [string]$ConfigPath = "$PSScriptRoot\config.json",
 
     # UI language of the result window (the log stays English); the menu passes its choice
@@ -141,64 +138,34 @@ Write-Log "Deploying: $($deploymentConfig.name)"
 # FUNCTION DEFINITIONS
 # ============================================================================
 
-Function Install-PackageManager {
+Function Install-Chocolatey {
     <#
     .SYNOPSIS
-        Install Chocolatey package manager with security checks
+        Install Chocolatey (fallback package source) - script downloaded to a file, not piped to iex
     #>
-    param(
-        [Parameter(Mandatory)]
-        [ValidateSet('chocolatey', 'winget')]
-        [string]$Manager
-    )
-    
-    Write-Log "Installing $Manager..."
-    
+    Write-Log "Installing Chocolatey..."
     try {
-        if (Get-Command $Manager -ErrorAction SilentlyContinue) {
-            Write-Log "$Manager is already installed" -Level Success
-            return $true
+        if (Get-Command choco -ErrorAction SilentlyContinue) {
+            Write-Log "Chocolatey is already installed" -Level Success
+            return
         }
-        
-        switch ($Manager) {
-            'chocolatey' {
-                # Use environment variable for the script, don't pipe downloads directly to iex
-                $chocoScriptPath = Join-Path $env:TEMP "install-choco.ps1"
-                
-                Write-Log "Downloading Chocolatey installation script..."
-                try {
-                    $ProgressPreference = 'SilentlyContinue'
-                    Invoke-WebRequest -Uri "https://community.chocolatey.org/install.ps1" `
-                        -OutFile $chocoScriptPath `
-                        -ErrorAction Stop
-                    
-                    # Verify file was downloaded
-                    if (Test-Path $chocoScriptPath) {
-                        Write-Log "Executing Chocolatey installation script..."
-                        [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
-                        & $chocoScriptPath
-                        Remove-Item $chocoScriptPath -Force
-                        
-                        if (Get-Command choco -ErrorAction SilentlyContinue) {
-                            Write-Log "$Manager installed successfully" -Level Success
-                            return $true
-                        } else {
-                            throw "Chocolatey installation failed"
-                        }
-                    }
-                } finally {
-                    $ProgressPreference = 'Continue'
-                }
-            }
-            
-            'winget' {
-                Write-Log "Winget installation not implemented - please install manually from Microsoft Store"
-                return $false
-            }
+        $chocoScriptPath = Join-Path $env:TEMP "install-choco.ps1"
+        Write-Log "Downloading Chocolatey installation script..."
+        try {
+            $ProgressPreference = 'SilentlyContinue'
+            Invoke-WebRequest -Uri "https://community.chocolatey.org/install.ps1" -OutFile $chocoScriptPath -ErrorAction Stop
+            Write-Log "Executing Chocolatey installation script..."
+            [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
+            & $chocoScriptPath
+            Remove-Item $chocoScriptPath -Force
+            if (-not (Get-Command choco -ErrorAction SilentlyContinue)) { throw "Chocolatey installation failed" }
+            Write-Log "Chocolatey installed successfully" -Level Success
+        } finally {
+            $ProgressPreference = 'Continue'
         }
     }
     catch {
-        Write-Log "Failed to install $Manager : $_" -Level Error -Key warn.chocoFailed -KeyArgs "$_"
+        Write-Log "Failed to install Chocolatey: $_" -Level Error -Key warn.chocoFailed -KeyArgs "$_"
         throw
     }
 }
@@ -262,17 +229,14 @@ Function Wait-MsiIdle {
     return $false
 }
 
-Function Install-Packages {
+Function Install-ChocolateyPackages {
     <#
     .SYNOPSIS
-        Install software packages from Chocolatey
+        Install packages with Chocolatey (the fallback when winget fails)
     #>
     param(
         [Parameter(Mandatory)]
         [string[]]$PackageList,
-
-        [ValidateSet('chocolatey', 'winget')]
-        [string]$Manager = 'chocolatey',
 
         # Package parameters passed as --params (e.g. Adobe's update mode)
         [string]$ChocoParams
@@ -286,167 +250,145 @@ Function Install-Packages {
     Write-Log "Installing packages: $($PackageList -join ', ')"
     
     try {
-        if ($Manager -eq 'chocolatey') {
-            $null = Invoke-NativeCommand choco @('feature', 'enable', '-n', 'allowGlobalConfirmation')
+        $null = Invoke-NativeCommand choco @('feature', 'enable', '-n', 'allowGlobalConfirmation')
 
-            foreach ($package in $PackageList) {
-                # Pre-check: already tracked by choco
-                $preCheck = Invoke-NativeCommand choco @('list', '--local-only', '--exact', $package, '--limit-output')
-                if ($preCheck -match "(?m)^$([regex]::Escape($package))\|") {
-                    Write-Log "  Already installed: $package" -Level Info
-                    continue
-                }
-
-                if (Test-PackageInstalledInRegistry -PackageName $package) {
-                    Write-Log "  Already installed (registry): $package - skipping" -Level Info
-                    continue
-                }
-
-                $installed = $false
-                $maxAttempts = 3
-
-                for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
-                    Write-Log "  Installing: $package (attempt $attempt/$maxAttempts)"
-                    $chocoArgs = @('install', '-y', $package)
-                    # Chrome's choco package frequently has a stale expected hash; ignore-checksums is safe here
-                    if ($package -eq 'googlechrome') { $chocoArgs += '--ignore-checksums' }
-                    if ($ChocoParams) { $chocoArgs += "--params=`"'$ChocoParams'`"" }
-
-                    # Redirect stdout to a temp file so we can detect when the download finishes
-                    # and the installer actually starts — only then begin the 5-min kill timer.
-                    # stderr is left unredirected so choco error messages still appear in the console.
-                    $tmpOut = [System.IO.Path]::GetTempFileName()
-                    $proc = Start-Process -FilePath "choco" -ArgumentList $chocoArgs `
-                        -RedirectStandardOutput $tmpOut -NoNewWindow -PassThru
-                    # Touch the handle now: without it, Start-Process -PassThru often reports
-                    # ExitCode as $null once the process has exited
-                    $null = $proc.Handle
-                    $fs = [System.IO.FileStream]::new(
-                        $tmpOut,
-                        [System.IO.FileMode]::Open,
-                        [System.IO.FileAccess]::Read,
-                        [System.IO.FileShare]::ReadWrite)
-                    $sr = [System.IO.StreamReader]::new($fs)
-                    $downloadCompleteAt = $null  # nil until download finishes; used to start kill timer
-                    $installDeadline    = $null
-                    $killedEarly        = $false
-                    $lastWasProgress    = $false
-                    $chocoNoise = '(?i)' + (@(
-                        '^Chocolatey v'
-                        '^Installing the following packages:'
-                        '^By installing'
-                        '^Downloading package from source'
-                        '\[Approved\]'
-                        'package files install completed\.'
-                        '^Downloading .+ \d+ bit'
-                        '^  from '
-                        'Hashes match\.'
-                        'has been installed\.'
-                        'The install of .+ was successful\.'
-                        "^Deployed to '"
-                        '^Chocolatey installed \d+/\d+ packages\.'
-                        '^See the log for details'
-                        'using locale'
-                        '^\s*$'
-                    ) -join '|')
-                    # dot-sourced so it reads/writes $line and $lastWasProgress from caller scope
-                    $writeChocoLine = {
-                        if ($line -match '^Progress:') {
-                            # Pad to 80 chars so shorter lines fully overwrite longer ones
-                            Write-Host "`r$($line.PadRight(80))" -NoNewline
-                            $lastWasProgress = $true
-                        } elseif ($line -notmatch $chocoNoise) {
-                            if ($lastWasProgress) { Write-Host "" }
-                            Write-Host $line
-                            $lastWasProgress = $false
-                        }
-                    }
-                    try {
-                        while ($true) {
-                            $line = $sr.ReadLine()
-                            while ($null -ne $line) {
-                                . $writeChocoLine
-                                if ($null -eq $downloadCompleteAt -and $line -match '(?i)Download of .+ completed\.') {
-                                    $downloadCompleteAt = [datetime]::UtcNow
-                                    $installDeadline    = $downloadCompleteAt.AddMinutes(5)
-                                    Write-Log "    Download complete - 5 min installer timeout started" -Level Info
-                                }
-                                $line = $sr.ReadLine()
-                            }
-                            if ($proc.WaitForExit(500)) { break }
-                            if ($null -ne $installDeadline -and [datetime]::UtcNow -gt $installDeadline) {
-                                Write-Log "    $package installer running for 5 min - terminating" -Level Info
-                                $null = Invoke-NativeCommand taskkill @('/T', '/F', '/PID', $proc.Id)
-                                Write-Log "    taskkill exit: $LASTEXITCODE" -Level Info
-                                $killedEarly = $true
-                                # msiexec runs outside choco's process tree; wait for it to release
-                                # the installer mutex so the next attempt/package doesn't fail with 1618
-                                if (-not (Wait-MsiIdle -TimeoutSeconds 120)) {
-                                    Write-Log "    Windows Installer still busy after 2 min" -Level Warning -Key warn.msiBusy
-                                }
-                                break
-                            }
-                        }
-                        while ($null -ne ($line = $sr.ReadLine())) { . $writeChocoLine }
-                    } finally {
-                        $sr.Dispose()
-                        $fs.Dispose()
-                        Remove-Item $tmpOut -Force -ErrorAction SilentlyContinue
-                    }
-                    # A killed installer has no meaningful exit code; only choco tracking can confirm it
-                    $chocoExit = if ($killedEarly) { $null } else { $proc.ExitCode }
-
-                    # Verify via choco tracking (--limit-output gives clean name|version format)
-                    $localPackage = Invoke-NativeCommand choco @('list', '--local-only', '--exact', $package, '--limit-output')
-                    if ($localPackage -match "(?m)^$([regex]::Escape($package))\|") {
-                        $installed = $true
-                        Write-Log "    Installed: $package" -Level Success
-                        break
-                    }
-
-                    # Exit 0/1641/3010 = success or reboot-pending; choco may have skipped an
-                    # externally-installed package without adding it to its tracking DB
-                    if ($null -ne $chocoExit -and $chocoExit -in @(0, 1641, 3010)) {
-                        $installed = $true
-                        Write-Log "    Installed: $package" -Level Success
-                        break
-                    }
-
-                    Write-Log "    Package install not confirmed for '$package'" -Level Info
-                    if ($attempt -lt $maxAttempts) { Start-Sleep -Seconds 3 }
-                }
-
-                if (-not $installed -and $package -eq 'googlechrome') {
-                    Write-Log "  Falling back to winget for Google Chrome..." -Level Info
-                    if (Get-Command winget -ErrorAction SilentlyContinue) {
-                        Write-Log "    Resetting winget sources..." -Level Info
-                        $null = Invoke-NativeCommand winget @('source', 'reset', '--force')
-                        $null = Invoke-NativeCommand winget @('source', 'update', '--disable-interactivity')
-                        Invoke-NativeCommand winget @('install', '--id', 'Google.Chrome', '--silent', '--accept-package-agreements', '--accept-source-agreements', '--source', 'winget') | Write-Host
-                        if ($LASTEXITCODE -eq 0) {
-                            $installed = $true
-                            Write-Log "    Installed googlechrome via winget fallback" -Level Success
-                        }
-                        else {
-                            Write-Log "    Winget fallback failed for googlechrome (exit code $LASTEXITCODE)" -Level Info
-                        }
-                    }
-                    else {
-                        Write-Log "    Winget not available for googlechrome fallback" -Level Info
-                    }
-                }
-
-                if (-not $installed) {
-                    if (Test-PackageInstalledInRegistry -PackageName $package) {
-                        $installed = $true
-                    } else {
-                        Write-Log "    Failed to install '$package' after retries" -Level Warning -Key warn.pkgFailed -KeyArgs $package
-                    }
-                }
+        foreach ($package in $PackageList) {
+            # Pre-check: already tracked by choco
+            $preCheck = Invoke-NativeCommand choco @('list', '--local-only', '--exact', $package, '--limit-output')
+            if ($preCheck -match "(?m)^$([regex]::Escape($package))\|") {
+                Write-Log "  Already installed: $package" -Level Info
+                continue
             }
 
-            Write-Log "Package installation completed" -Level Success
+            if (Test-PackageInstalledInRegistry -PackageName $package) {
+                Write-Log "  Already installed (registry): $package - skipping" -Level Info
+                continue
+            }
+
+            $installed = $false
+            $maxAttempts = 3
+
+            for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+                Write-Log "  Installing: $package (attempt $attempt/$maxAttempts)"
+                $chocoArgs = @('install', '-y', $package)
+                # Chrome's choco package frequently has a stale expected hash; ignore-checksums is safe here
+                if ($package -eq 'googlechrome') { $chocoArgs += '--ignore-checksums' }
+                if ($ChocoParams) { $chocoArgs += "--params=`"'$ChocoParams'`"" }
+
+                # Redirect stdout to a temp file so we can detect when the download finishes
+                # and the installer actually starts — only then begin the 5-min kill timer.
+                # stderr is left unredirected so choco error messages still appear in the console.
+                $tmpOut = [System.IO.Path]::GetTempFileName()
+                $proc = Start-Process -FilePath "choco" -ArgumentList $chocoArgs `
+                    -RedirectStandardOutput $tmpOut -NoNewWindow -PassThru
+                # Touch the handle now: without it, Start-Process -PassThru often reports
+                # ExitCode as $null once the process has exited
+                $null = $proc.Handle
+                $fs = [System.IO.FileStream]::new(
+                    $tmpOut,
+                    [System.IO.FileMode]::Open,
+                    [System.IO.FileAccess]::Read,
+                    [System.IO.FileShare]::ReadWrite)
+                $sr = [System.IO.StreamReader]::new($fs)
+                $downloadCompleteAt = $null  # nil until download finishes; used to start kill timer
+                $installDeadline    = $null
+                $killedEarly        = $false
+                $lastWasProgress    = $false
+                $chocoNoise = '(?i)' + (@(
+                    '^Chocolatey v'
+                    '^Installing the following packages:'
+                    '^By installing'
+                    '^Downloading package from source'
+                    '\[Approved\]'
+                    'package files install completed\.'
+                    '^Downloading .+ \d+ bit'
+                    '^  from '
+                    'Hashes match\.'
+                    'has been installed\.'
+                    'The install of .+ was successful\.'
+                    "^Deployed to '"
+                    '^Chocolatey installed \d+/\d+ packages\.'
+                    '^See the log for details'
+                    'using locale'
+                    '^\s*$'
+                ) -join '|')
+                # dot-sourced so it reads/writes $line and $lastWasProgress from caller scope
+                $writeChocoLine = {
+                    if ($line -match '^Progress:') {
+                        # Pad to 80 chars so shorter lines fully overwrite longer ones
+                        Write-Host "`r$($line.PadRight(80))" -NoNewline
+                        $lastWasProgress = $true
+                    } elseif ($line -notmatch $chocoNoise) {
+                        if ($lastWasProgress) { Write-Host "" }
+                        Write-Host $line
+                        $lastWasProgress = $false
+                    }
+                }
+                try {
+                    while ($true) {
+                        $line = $sr.ReadLine()
+                        while ($null -ne $line) {
+                            . $writeChocoLine
+                            if ($null -eq $downloadCompleteAt -and $line -match '(?i)Download of .+ completed\.') {
+                                $downloadCompleteAt = [datetime]::UtcNow
+                                $installDeadline    = $downloadCompleteAt.AddMinutes(5)
+                                Write-Log "    Download complete - 5 min installer timeout started" -Level Info
+                            }
+                            $line = $sr.ReadLine()
+                        }
+                        if ($proc.WaitForExit(500)) { break }
+                        if ($null -ne $installDeadline -and [datetime]::UtcNow -gt $installDeadline) {
+                            Write-Log "    $package installer running for 5 min - terminating" -Level Info
+                            $null = Invoke-NativeCommand taskkill @('/T', '/F', '/PID', $proc.Id)
+                            Write-Log "    taskkill exit: $LASTEXITCODE" -Level Info
+                            $killedEarly = $true
+                            # msiexec runs outside choco's process tree; wait for it to release
+                            # the installer mutex so the next attempt/package doesn't fail with 1618
+                            if (-not (Wait-MsiIdle -TimeoutSeconds 120)) {
+                                Write-Log "    Windows Installer still busy after 2 min" -Level Warning -Key warn.msiBusy
+                            }
+                            break
+                        }
+                    }
+                    while ($null -ne ($line = $sr.ReadLine())) { . $writeChocoLine }
+                } finally {
+                    $sr.Dispose()
+                    $fs.Dispose()
+                    Remove-Item $tmpOut -Force -ErrorAction SilentlyContinue
+                }
+                # A killed installer has no meaningful exit code; only choco tracking can confirm it
+                $chocoExit = if ($killedEarly) { $null } else { $proc.ExitCode }
+
+                # Verify via choco tracking (--limit-output gives clean name|version format)
+                $localPackage = Invoke-NativeCommand choco @('list', '--local-only', '--exact', $package, '--limit-output')
+                if ($localPackage -match "(?m)^$([regex]::Escape($package))\|") {
+                    $installed = $true
+                    Write-Log "    Installed: $package" -Level Success
+                    break
+                }
+
+                # Exit 0/1641/3010 = success or reboot-pending; choco may have skipped an
+                # externally-installed package without adding it to its tracking DB
+                if ($null -ne $chocoExit -and $chocoExit -in @(0, 1641, 3010)) {
+                    $installed = $true
+                    Write-Log "    Installed: $package" -Level Success
+                    break
+                }
+
+                Write-Log "    Package install not confirmed for '$package'" -Level Info
+                if ($attempt -lt $maxAttempts) { Start-Sleep -Seconds 3 }
+            }
+
+            if (-not $installed) {
+                if (Test-PackageInstalledInRegistry -PackageName $package) {
+                    $installed = $true
+                } else {
+                    Write-Log "    Failed to install '$package' after retries" -Level Warning -Key warn.pkgFailed -KeyArgs $package
+                }
+            }
         }
+
+        Write-Log "Package installation completed" -Level Success
     }
     catch {
         Write-Log "Package installation failed: $_" -Level Error -Key warn.pkgFatal -KeyArgs "$_"
@@ -1134,9 +1076,9 @@ Function Install-AppPackages {
         Write-Log "  Falling back to Chocolatey for $name ($chocoId)"
         try {
             if (-not (Get-Command choco -ErrorAction SilentlyContinue)) {
-                Install-PackageManager -Manager chocolatey
+                Install-Chocolatey
             }
-            Install-Packages -PackageList @($chocoId) -Manager chocolatey -ChocoParams "$($entry.chocoParams)"
+            Install-ChocolateyPackages -PackageList @($chocoId) -ChocoParams "$($entry.chocoParams)"
         }
         catch {
             Write-Log "Chocolatey fallback failed for ${name}: $_" -Level Warning -Key warn.pkgFailed -KeyArgs $name
@@ -1439,6 +1381,43 @@ Function Register-SetupFolderCleanup {
     }
 }
 
+Function Restart-Explorer {
+    <#
+    .SYNOPSIS
+        Restart Explorer so settings written to the registry show without a sign-out
+    .DESCRIPTION
+        Windows restarts the shell by itself (AutoRestartShell) as the signed-in user. If it
+        isn't back within 15 s, it is started as that user through a short-lived scheduled
+        task - an Explorer started from this elevated session would be rejected as the shell.
+    #>
+    try {
+        Stop-ProcessWithTimeout -Name 'explorer' -TimeoutSeconds 10
+        for ($i = 0; $i -lt 15 -and -not (Get-Process explorer -ErrorAction SilentlyContinue); $i++) { Start-Sleep -Seconds 1 }
+        if (Get-Process explorer -ErrorAction SilentlyContinue) {
+            Write-Log "Explorer restarted" -Level Success
+            return
+        }
+        $shellUser = (Get-CimInstance -ClassName Win32_ComputerSystem).UserName
+        if (-not $shellUser) { Start-Process explorer.exe; return }
+        $explorerAction    = New-ScheduledTaskAction -Execute "$env:SystemRoot\explorer.exe"
+        $explorerPrincipal = New-ScheduledTaskPrincipal -UserId $shellUser -LogonType Interactive -RunLevel Limited
+        $explorerSettings  = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes 1) -Priority 4
+        try {
+            Register-ScheduledTask -TaskName 'GKScript-StartExplorer' -Action $explorerAction `
+                -Settings $explorerSettings -Principal $explorerPrincipal -Force | Out-Null
+            Start-ScheduledTask -TaskName 'GKScript-StartExplorer'
+            Start-Sleep -Seconds 2
+            Write-Log "Explorer started as $shellUser" -Level Success
+        }
+        finally {
+            Unregister-ScheduledTask -TaskName 'GKScript-StartExplorer' -Confirm:$false -ErrorAction SilentlyContinue
+        }
+    }
+    catch {
+        Write-Log "Explorer restart failed: $_" -Level Warning -Key warn.explorer -KeyArgs "$_"
+    }
+}
+
 Function Get-UsedPcSigns {
     <#
     .SYNOPSIS
@@ -1728,7 +1707,7 @@ try {
         # Step 9: Uninstall Office
         Write-Log "Step 9: Uninstalling Office (80%)"
         $script:CurrentStep = 'office'
-        Uninstall-Microsoft365
+        Uninstall-Microsoft365 -SetupUrl $script:config.office.setupUrl
 
         # Step 10: Run debloat script
         Write-Log "Step 10: Running debloat script (90%)"
@@ -1808,85 +1787,19 @@ try {
     Register-SetupFolderCleanup -SetupRoot $setupRoot
     if (-not $InstallOnly) { New-SetupRestorePoint }
 
-    # Install only leaves the customer's desktop layout and Explorer alone
+    # Final: restart Explorer so the taskbar, desktop-icon and Start settings show right away.
+    # Install only leaves Explorer alone (the settings apply at the next sign-in).
     if (-not $InstallOnly) {
-        # Final: Stop Explorer, write icon layout to registry, then restart Explorer.
-        # The registry write MUST happen while Explorer is dead - otherwise Explorer
-        # overwrites IconLayouts with the current layout on shutdown.
-        Write-Log "Finalizing... (98%)"
+        Write-Log "Finalizing: restarting Explorer (98%)"
         $script:CurrentStep = 'finalize'
-        $explorerKey = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon'
-        $originalShell = (Get-ItemProperty -Path $explorerKey -Name Shell -ErrorAction SilentlyContinue).Shell
-        $shellBlanked = $false
-        try {
-            # Prevent Windows from auto-restarting Explorer after we kill it
-            Set-ItemProperty -Path $explorerKey -Name Shell -Value '' -Force
-            $shellBlanked = $true
-
-            # Wait-Process is unreliable if Win11 auto-restarts Explorer before we write the registry.
-            Stop-ProcessWithTimeout -Name 'explorer' -TimeoutSeconds 15
-
-            $desktopRegFile = if ($deploymentConfig.packages -contains "libreoffice") {
-                "$PSScriptRoot\desktop_libreoffice.reg"
-            } else {
-                "$PSScriptRoot\desktop.reg"
-            }
-            if (Test-Path $desktopRegFile) {
-                Write-Log "Applying desktop icon layout ($desktopRegFile)..."
-                Set-RegistrySettings -RegistryFiles @($desktopRegFile) -RegistryValues @{}
-                Write-Log "Desktop icon layout applied" -Level Success
-            } else {
-                Write-Log "Desktop reg file not found: $desktopRegFile" -Level Warning -Key warn.layoutMissing -KeyArgs (Split-Path $desktopRegFile -Leaf)
-            }
-        }
-        catch {
-            Write-Log "Explorer restart failed: $_" -Level Warning -Key warn.explorer -KeyArgs "$_"
-        }
-        finally {
-            # Always restore the shell, whatever happened above: an empty Shell value leaves
-            # every user without a desktop at the next logon
-            if ($shellBlanked) {
-                try {
-                    $shellValue = if ($originalShell) { $originalShell } else { 'explorer.exe' }
-                    Set-ItemProperty -Path $explorerKey -Name Shell -Value $shellValue -Force
-                }
-                catch {
-                    Write-Log "Could not restore the Winlogon Shell value: $_" -Level Error -Key warn.explorer -KeyArgs "$_"
-                }
-            }
-
-            # Start Explorer as the logged-in user (not elevated) so it properly becomes the shell.
-            # Start-Process from an admin session would launch it elevated, which Windows rejects as shell.
-            try {
-                $shellUser = (Get-CimInstance -ClassName Win32_ComputerSystem).UserName
-                if ($shellUser) {
-                    $explorerAction    = New-ScheduledTaskAction -Execute 'C:\Windows\explorer.exe'
-                    $explorerPrincipal = New-ScheduledTaskPrincipal -UserId $shellUser -LogonType Interactive -RunLevel Limited
-                    $explorerSettings  = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes 1) -Priority 4
-                    try {
-                        Register-ScheduledTask -TaskName 'GKScript-StartExplorer' -Action $explorerAction `
-                            -Settings $explorerSettings -Principal $explorerPrincipal -Force | Out-Null
-                        Start-ScheduledTask -TaskName 'GKScript-StartExplorer'
-                        Start-Sleep -Seconds 2
-                    }
-                    finally {
-                        Unregister-ScheduledTask -TaskName 'GKScript-StartExplorer' -Confirm:$false -ErrorAction SilentlyContinue
-                    }
-                } elseif (-not (Get-Process explorer -ErrorAction SilentlyContinue)) {
-                    Start-Process explorer.exe
-                }
-            }
-            catch {
-                Write-Log "Explorer restart failed: $_" -Level Warning -Key warn.explorer -KeyArgs "$_"
-            }
-        }
+        Restart-Explorer
     }
 
     # Any pending restart (updates, removed antivirus, servicing) is offered in the result window
     if (Test-PendingReboot) { $script:RebootRequired = $true }
 
     # Shown last: the technician has usually walked away, and a window before the
-    # Explorer step would hold back the desktop layout until someone clicks
+    # Explorer restart would hold it back until someone clicks
     $issues = Get-LogIssues
     if ($issues.Count -eq 0) {
         Write-Log "=== Setup Completed Successfully ===" -Level Success

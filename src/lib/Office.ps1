@@ -17,17 +17,17 @@ Function Get-OfficeProductIds {
 Function Get-OfficeSetup {
     <#
     .SYNOPSIS
-        The current Click-to-Run setup.exe from Microsoft's CDN; the bundled one if that fails
+        The current Click-to-Run setup.exe from Microsoft's CDN, or $null if it can't be had
     .DESCRIPTION
         The CDN file is the setup.exe of the current Office Deployment Tool (byte-identical,
-        checked 2026-10; also what Microsoft's own winget manifest installs from). Published
-        only if it carries a valid Microsoft signature.
+        checked 2026-10; also what Microsoft's own winget manifest installs from). Used only if
+        it carries a valid Microsoft signature. Nothing is bundled: the run needs internet
+        anyway, and the Office files themselves always come from the CDN.
     #>
     param(
         [Parameter(Mandatory)][string]$Url,
         [Parameter(Mandatory)][string]$Folder
     )
-    $bundled = Join-Path (Split-Path $PSScriptRoot -Parent) 'OfficeSetup.exe'
     $target = Join-Path $Folder 'setup.exe'
     try {
         $null = New-Item -ItemType Directory -Force -Path $Folder
@@ -42,8 +42,8 @@ Function Get-OfficeSetup {
         return $target
     }
     catch {
-        Write-Log "Current Office setup not available ($_) - using the bundled OfficeSetup.exe"
-        return $bundled
+        Write-Log "Office setup could not be downloaded: $_"
+        return $null
     }
 }
 
@@ -93,10 +93,11 @@ Function Uninstall-Microsoft365 {
     .SYNOPSIS
         Remove every Office product silently: ODT, then winget, then silent registry uninstalls
     .PARAMETER SetupExe
-        Click-to-Run setup.exe to use (office.ps1 passes the current one); default: the bundled
-        src\OfficeSetup.exe
+        Click-to-Run setup.exe to use (office.ps1 passes the one it downloaded)
+    .PARAMETER SetupUrl
+        Without -SetupExe: where to download it, once Office has actually been found
     #>
-    param([string]$SetupExe)
+    param([string]$SetupExe, [string]$SetupUrl)
     Write-Log "Uninstalling Microsoft 365..."
 
     $clickToRunKey = 'HKLM:\SOFTWARE\Microsoft\Office\ClickToRun\Configuration'
@@ -126,10 +127,10 @@ Function Uninstall-Microsoft365 {
 
     # Pass 1: Office Deployment Tool - silent by design (Display Level=None), removes
     # every Click-to-Run product/language and MSI Office in one go
-    $srcRoot = Split-Path $PSScriptRoot -Parent
-    $odtPath = if ($SetupExe) { $SetupExe } else { Join-Path $srcRoot "OfficeSetup.exe" }
-    $odtXml  = Join-Path $srcRoot "office.xml"
-    if ((Test-Path $odtPath -PathType Leaf) -and (Test-Path $odtXml -PathType Leaf)) {
+    $odtPath = $SetupExe
+    if (-not $odtPath -and $SetupUrl) { $odtPath = Get-OfficeSetup -Url $SetupUrl -Folder (Join-Path $env:TEMP 'NetixxOffice') }
+    $odtXml  = Join-Path (Split-Path $PSScriptRoot -Parent) "office.xml"
+    if ($odtPath -and (Test-Path $odtPath -PathType Leaf) -and (Test-Path $odtXml -PathType Leaf)) {
         Write-Log "Attempting Office removal via Office Deployment Tool..." -Level Info
         try {
             $odt = Start-Process -FilePath $odtPath -ArgumentList @('/configure', "`"$odtXml`"") -NoNewWindow -PassThru
@@ -144,7 +145,7 @@ Function Uninstall-Microsoft365 {
             Write-Log "  Office Deployment Tool failed: $_" -Level Info
         }
     } else {
-        Write-Log "  OfficeSetup.exe or office.xml missing - skipping ODT removal" -Level Info
+        Write-Log "  Office setup or office.xml not available - skipping ODT removal" -Level Info
     }
 
     if (-not (Test-OfficeStillInstalled)) {

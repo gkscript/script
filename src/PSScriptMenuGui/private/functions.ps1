@@ -39,19 +39,6 @@ Function Get-VisualChildren {
     return $children
 }
 
-Function Get-XamlSafeString {
-    param(
-        [Parameter(Mandatory)][string]$string
-    )
-    # https://docs.microsoft.com/en-us/dotnet/framework/wpf/advanced/how-to-use-special-characters-in-xaml
-    # Order matters: &amp first
-    $string = $string.Replace('&','&amp;').Replace('<','&lt;').Replace('>','&gt;').Replace('"','&quot;')
-    # Restore line breaks
-    $string = $string -replace '&lt;\s*?LineBreak\s*?\/\s*?&gt;','<LineBreak />'
-
-    return $string
-}
-
 Function New-GuiForm {
     # Based on: https://foxdeploy.com/2015/05/14/part-iii-using-advanced-gui-elements-in-powershell/
     param (

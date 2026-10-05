@@ -20,7 +20,7 @@ Success: the technician starts the run, walks away, and comes back to a finished
 
 ## Positioning
 
-It encodes Netixx's own house standard for a delivered PC: the package set, the desktop layout, OEM support info, and the Helpdesk remote-support client. It runs from a single self-extracting exe with no infrastructure (no MDM, domain, or imaging server). That makes it usable both at the bench and at a customer site.
+It encodes Netixx's own house standard for a delivered PC: the package set, a clean desktop and taskbar, OEM support info, and the Helpdesk remote-support client. It runs from a single self-extracting exe with no infrastructure (no MDM, domain, or imaging server). That makes it usable both at the bench and at a customer site.
 
 ## Operating Context
 

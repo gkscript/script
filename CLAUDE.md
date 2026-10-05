@@ -45,7 +45,6 @@ powershell -ExecutionPolicy Bypass -File src\main.ps1 -DeploymentType business|c
     [-Language de|en|it]      # UI language of the result window (default de); the log stays English
 ```
 
-`-SkipHideConsole` is declared in `main.ps1` but currently does nothing.
 
 ## Architecture
 
@@ -66,7 +65,7 @@ gk-script.exe (NSIS) → launch.bat → PSScriptMenuGui (reads src/gui.csv) → 
   - `main.ps1` converts only the **top level** to hashtables (nested objects stay `PSCustomObject`; keys starting with `_` are skipped).
 - **`src/office.ps1`** installs one Office product, separately from the profiles. Microsoft: "If you use the wrong product ID, you can't activate Office", so the technician picks the product matching the customer's licence in a question window (rows from `config.office.products`).
   - `O365BusinessRetail` covers Apps for Business, Business Standard and Business Premium; `HomeBusiness2024Retail` and `Home2024Retail` are the 2024 one-time purchases; `O365HomePremRetail` is Family/Personal.
-  - It downloads the current ODT `setup.exe` from `config.office.setupUrl` (Microsoft signature checked; the bundled `OfficeSetup.exe` is the fallback). Any other Office suite is removed first (`Uninstall-Microsoft365`); the same product is just updated.
+  - It downloads the current ODT `setup.exe` from `config.office.setupUrl` (Microsoft signature checked; nothing is bundled - the run needs internet anyway, and the Office files always come from the CDN). Any other Office suite is removed first (`Uninstall-Microsoft365`); the same product is just updated.
   - `New-OfficeConfiguration` writes the XML: 64-bit, Current Channel, `MatchOS` language, proofing tools for the other `proofingLanguages`, `excludeApps` (+ OneDrive for products with `oneDrive: false`), classic and new Outlook, RemoveMSI, silent. Success = the product is in `ProductReleaseIds` and `WINWORD.EXE` exists. It logs to `office_*.log`, which the used-PC check ignores.
 - **`src/lib/Office.ps1`** (dot-sourced by the module): `Get-OfficeProductIds`, `Get-OfficeSetup`, `New-OfficeConfiguration`, `Uninstall-Microsoft365` (shared with `main.ps1` Step 9).
 - **`src/lib/PSSetupUtility.psm1`**: `Write-Log`, `Initialize-Logging` (`-Name` = log prefix), `Restart-In64BitPowerShell`, `Test-Prerequisite*`, `Sync-SystemTimeWithInternet`, `Get-SystemGPU`, `Get-BitlockerStatus`, `Invoke-NativeCommand`, `Invoke-SilentUninstall`, `Get-UninstallEntries`, `Get-LogIssues`, `Set-KeepAwake`, `Show-SetupResult` and the language functions. `debloat.ps1` runs in the same session, so these are available there too.
@@ -87,7 +86,7 @@ gk-script.exe (NSIS) → launch.bat → PSScriptMenuGui (reads src/gui.csv) → 
 ### main.ps1 flow
 
 **Two modes.** The full setup is for a new PC. `-InstallOnly` is for a PC already in use: it installs and configures, and removes or turns off nothing.
-- Install only skips: antivirus removal (0), notebook power and the current account's theme colors (4), the whitelist cleanup (5: only shortcuts the installers just added and that aren't whitelisted are removed, via a snapshot before Step 2), BitLocker (6), Office removal, debloat, OneDrive removal and the branding re-apply (9-10), Start pins and the default-apps note (11), emptying the recycle bin (13) and the Explorer/desktop-layout step.
+- Install only skips: antivirus removal (0), notebook power and the current account's theme colors (4), the whitelist cleanup (5: only shortcuts the installers just added and that aren't whitelisted are removed, via a snapshot before Step 2), BitLocker (6), Office removal, debloat, OneDrive removal and the branding re-apply (9-10), Start pins and the default-apps note (11), emptying the recycle bin (13) and the Explorer restart.
 - It keeps everything else, including all Netixx settings, `disable_telemetry.reg` (imported in Step 4 because debloat doesn't run), all updates, branding and the Helpdesk. The restore point is created first instead of last.
 - Before Step 0, a full run checks for signs of use (`Get-UsedPcSigns`): a log from an earlier run, 10+ personal files in an account's Desktop/Documents/Pictures/Videos/Music/OneDrive folders, or Windows installed more than 30 days ago. If any is found, the result window asks: install only (recommended), full setup anyway, or cancel (exits without changes).
 
@@ -102,7 +101,7 @@ The step numbers below match the `Write-Log "Step N"` messages in the code.
   - Then it records whether Chocolatey was already present, and `Initialize-Winget` registers App Installer if winget isn't usable yet (a documented first-logon delay).
 - **2. Packages.** `Install-AppPackages` tries winget for each package first (`Install-WingetPackage`: up to 2 attempts, 20-min timeout, success verified with `winget list`; exit `0x8A150014` = ID not found, so try the next ID). An already installed package is updated (`winget upgrade`), unless `-SkipUpdates`. A catalog entry without `choco` (Store-only apps) has no Chocolatey fallback.
   - The consumer profiles include the free **new Outlook** (msstore `9NRX63209R7B`, preinstalled on Windows 11 and updated here). Its catalog `appx` name is passed to `debloat.ps1 -KeepApps`, so debloat doesn't remove it; the business profile still removes it.
-  - If winget fails, Chocolatey is the fallback, installed on demand. The old `Install-Packages` choco loop is kept for that: retry, kill timer, `Wait-MsiIdle`, and `--ignore-checksums` only for Chrome.
+  - If winget fails, Chocolatey is the fallback, installed on demand. `Install-Chocolatey` and `Install-ChocolateyPackages` do that: retry, kill timer, `Wait-MsiIdle`, and `--ignore-checksums` only for Chrome.
   - Firefox resolves to `Mozilla.Firefox.de`/`.it` by display language. Chrome and PowerToys use `--scope machine`. Adobe from winget keeps its auto-update; the Chocolatey fallback gets `/UpdateMode:3 /EnableUpdateService`.
 - **3. GPU and updates.** Drivers for every GPU vendor come from Windows Update. Intel's control panel is installed by the Intel driver itself.
   - **3b.** Unless `-SkipUpdates`, `Install-WindowsUpdates` installs **every** update via the `Microsoft.Update.Session` COM API: drivers (`Type='Driver'`), plus all software updates (`Type='Software'`, which includes optional/`BrowseOnly`, preview, feature upgrades and Defender definitions).
@@ -121,7 +120,7 @@ The step numbers below match the `Write-Log "Step N"` messages in the code.
 - **7. Install folder and Helpdesk.** `C:\Install` is created and restricted (`Protect-InstallFolder`: Administrators/SYSTEM full, Users read/execute).
   - If branded, the **Netixx Helpdesk** is downloaded at runtime. A POST to `https://www.898.tv/api/CustomDesign` returns a signed Azure Blob URL.
   - The Helpdesk is linked on the Public Desktop only if its Authenticode signer is `CN=TeamViewer ...`. Otherwise it is deleted.
-- **9. Office.** `Uninstall-Microsoft365` runs three silent passes: the Office Deployment Tool (`OfficeSetup.exe /configure office.xml`), then winget (locale variants), then registry uninstall strings (`msiexec /qn`, `OfficeClickToRun.exe ... DisplayLevel=False`).
+- **9. Office.** `Uninstall-Microsoft365` runs three silent passes: the Office Deployment Tool (the current `setup.exe` from `config.office.setupUrl`, downloaded only when Office is found, `/configure office.xml`), then winget (locale variants), then registry uninstall strings (`msiexec /qn`, `OfficeClickToRun.exe ... DisplayLevel=False`).
   - A bare Click-to-Run `UninstallString` opens a blocking wizard, so it is never run.
 - **10. Debloat.** `debloat.ps1` runs with `$ErrorActionPreference = 'Continue'`.
   - **UWP:** the live Win11Debloat `Config/Apps.json` (strip the UTF-8 BOM, or PS 5.1's `ConvertFrom-Json` fails) supplies only its **default** selection (`SelectedByDefault`, never `unsafe`). On top come `$oemAndExtras`: OEM promo apps, the Widgets packages, new Outlook/Mail/Whiteboard/People, and **Samsung's Galaxy ecosystem and promo apps** (Samsung Account included).
@@ -149,7 +148,7 @@ The step numbers below match the `Write-Log "Step N"` messages in the code.
   - `Invoke-FinalCleanup` clears the Windows and user temp folders (never the running setup folder), the recycle bin and the Delivery Optimization cache.
   - `Register-SetupFolderCleanup` sets up a one-shot SYSTEM task that deletes `%TEMP%\NetixxSetup` at the next start. It applies only when running from the exe extract.
   - `New-SetupRestorePoint` turns on System Protection and creates a restore point.
-- **Final.** The Explorer dance (see below), then `Test-PendingReboot`, then the result window. The result window must come last, because a modal window would hold back the layout step.
+- **Final.** `Restart-Explorer` (see below), then `Test-PendingReboot`, then the result window. The result window must come last, because a modal window would hold back the Explorer restart.
   - Warnings make it yellow and are listed (`Get-LogIssues`). A pending reboot adds "Restart required" and **Restart now**. Nothing restarts automatically.
 
 Most steps catch their own errors and log a Warning so the run can continue. Only pre-flight failures and unexpected exceptions abort.
@@ -164,19 +163,11 @@ Most steps catch their own errors and log a Warning so the run can continue. Onl
 - Intermediate states are logged at `Info`.
 - debloat's per-app removals log at `Info`.
 
-### Explorer / desktop layout (fragile; read before touching)
+### Explorer restart
 
-The desktop icon layout reg (`desktop_libreoffice.reg` if the profile's packages include `libreoffice`, else `desktop.reg`) must be written **while Explorer is dead**. Otherwise Explorer overwrites `IconLayouts` on shutdown. The sequence:
-1. Blank `HKLM\...\Winlogon\Shell` so Windows won't auto-restart Explorer.
-2. `Stop-ProcessWithTimeout explorer`.
-3. Import the layout reg.
-4. Restore `Shell` **in a `finally` block**. An empty Shell value would leave every user without a desktop at the next logon, so it must be restored whatever fails before it.
-5. Start `explorer.exe` as the logged-in user via a scheduled task (`GKScript-StartExplorer`), also in the `finally`. An elevated Explorer is rejected as the shell.
+At the end of a full run, `Restart-Explorer` ends Explorer so settings written to the registry (taskbar, desktop icons, Start) show without a sign-out. Windows restarts the shell by itself (AutoRestartShell) as the signed-in user; if it isn't back within 15 s, it is started as `Win32_ComputerSystem.UserName` via a short-lived scheduled task (`GKScript-StartExplorer`), because an Explorer started from the elevated session is rejected as the shell. Install only skips it.
 
-## Stale / unused files
-
-- `desktop.reg` / `desktop_libreoffice.reg` were captured on a dev machine and still position icons no code creates (e.g. "Dynamic Theme.lnk").
-- The desktop-layout choice keys off the package list instead of a config field, which goes against the "config-driven" intent.
+There is no desktop icon layout any more: the old `desktop.reg` files were captured on a dev machine and needed the Winlogon `Shell` value blanked while Explorer was dead. Windows arranges the few remaining icons itself.
 
 ## Logging
 

@@ -107,7 +107,6 @@
   "warn.debloat": "Pulizia di Windows non riuscita: {0}",
   "warn.branding": "Impossibile riapplicare il branding OEM: {0}",
   "warn.oneDrive": "Impossibile disinstallare OneDrive ({0})",
-  "warn.layoutMissing": "File di layout del desktop mancante: {0}",
   "warn.explorer": "Impossibile riavviare Esplora file: {0}",
   "warn.timeSync": "Sincronizzazione dell'ora non riuscita: {0}",
   "warn.gpuDetect": "Impossibile rilevare la scheda grafica: {0}",
@@ -128,5 +127,6 @@
   "warn.wallpaper": "Impossibile configurare lo sfondo quotidiano di Bing: {0}",
   "warn.taskbarPins": "Impossibile aggiungere le app alla barra delle applicazioni: {0}",
   "warn.officeInstall": "Impossibile installare {0} (codice {1}).",
-  "warn.officeTimeout": "L'installazione di Office era ancora in corso dopo 60 minuti ed è stata interrotta."
+  "warn.officeTimeout": "L'installazione di Office era ancora in corso dopo 60 minuti ed è stata interrotta.",
+  "warn.officeDownload": "Impossibile scaricare il programma di installazione di Office da Microsoft."
 }
