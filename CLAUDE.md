@@ -164,7 +164,7 @@ The step numbers below match the `Write-Log "Step N"` messages in the code.
 Most steps catch their own errors and log a Warning so the run can continue. Only pre-flight failures and unexpected exceptions abort.
 
 **Languages.** The UI is German by default, with English and Italian; the menu has DE/EN/IT chips in the band.
-- Every user-visible string lives in `src/lang/<code>.json` (UTF-8) and is read with `Get-UiText <key> [args]` (`src/lib/Language.ps1`). A missing key falls back to English, then to the key itself. All three files must keep the same keys.
+- Every user-visible string lives in `src/lang/<code>.json` (UTF-8) and is read with `Get-UiText <key> [args]` (`src/lib/Language.ps1`). A missing key falls back to English, then to the key itself. All three files must keep the same keys. Exception: the menu footer tagline "Created for the people by www.netixx.it" is never translated, so it sits in `start.xaml`, not in the language files.
 - For a Warning a technician may see, call `Write-Log "English text" -Level Warning -Key warn.<name> -KeyArgs ...`. The log gets English; the result window gets the translation.
 - The failure window names the step via `$script:CurrentStep` (`step.<name>` keys); set it when adding a step.
 

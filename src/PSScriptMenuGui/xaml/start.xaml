@@ -55,9 +55,9 @@
             </Grid>
         </Border>
 
-        <!-- Footer -->
+        <!-- Footer: the Netixx tagline - English in every language, never translated -->
         <TextBlock DockPanel.Dock="Bottom" Style="{StaticResource Caption}" TextAlignment="Center"
-                   Margin="32,10,32,22" Text="{Binding Footer}"/>
+                   Margin="32,10,32,22" Text="Created for the people by www.netixx.it"/>
 
         <!-- Run options: one card, same surface as the profile rows; a hairline between the rows.
              Tag = the menu state key the switch sets ({mode} / {updates} in gui.csv). -->

@@ -166,9 +166,10 @@ src/
 
 ## Changelog
 
-### Unreleased
+### v2.2.1 — 2026-10-05
 - Screenshots in the README and on the release pages
 - Report: "none" in the same size as the lists
+- Menu footer: the slogan "Created for the people by www.netixx.it" stays English in every language, as before v1.3.0
 
 ### v2.2.0 — 2026-10-05
 - Handover report `C:\Install\Einrichtungsprotokoll.html` (device, serial number, Windows, apps with versions, updates, warnings), opened from the result window

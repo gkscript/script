@@ -93,7 +93,6 @@ Function Get-MenuDataContext {
     New-Object PSObject -Property @{
         WindowTitle = $state.WindowTitle
         Subtitle = $subtitle
-        Footer = Get-UiText menu.footer
         UpdatesEnabled = [bool]$state.UpdatesEnabled
         UpdatesLabel = Get-UiText menu.updates
         UpdatesHint = Get-UiText menu.updatesHint
