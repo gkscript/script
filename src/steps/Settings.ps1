@@ -176,13 +176,15 @@ Function Set-NewUserDefaultApps {
         UserChoiceLatest). Windows itself applies an imported association XML to every new
         profile at first logon. Built from assoc.txt; only ProgIds that actually exist on this
         PC are written. VLC registers "VLC.<ext>" (not "VLC.<ext>.Document" as in assoc.txt),
-        and .url stays with Windows (Chrome does not handle Internet Shortcuts).
+        Firefox "FirefoxHTML-<hash>" / "FirefoxURL-<hash>" (assoc.txt names the base), and .url
+        stays with Windows (a browser does not handle Internet Shortcuts).
     #>
     param([Parameter(Mandatory)][string]$AssocFile, [Parameter(Mandatory)][string]$OutputFolder)
 
     if (-not (Test-Path $AssocFile)) { return }
     $entries = New-Object System.Collections.Generic.List[object]
     $skipped = 0
+    $firefoxProgIds = $null
     foreach ($line in Get-Content $AssocFile) {
         $parts = $line.Split(',') | ForEach-Object { $_.Trim() } | Where-Object { $_ }
         if (@($parts).Count -lt 2) { continue }
@@ -191,6 +193,13 @@ Function Set-NewUserDefaultApps {
 
         $candidates = @($progId)
         if ($progId -match '^VLC\..+\.Document$') { $candidates = @(($progId -replace '\.Document$', ''), $progId) }
+        # Firefox registers FirefoxHTML-<hash>/FirefoxURL-<hash>, the hash depending on its install folder
+        if ($progId -match '^Firefox(HTML|URL|PDF)$') {
+            if ($null -eq $firefoxProgIds) {
+                $firefoxProgIds = @([Microsoft.Win32.Registry]::ClassesRoot.GetSubKeyNames() | Where-Object { $_ -like 'Firefox*-*' })
+            }
+            $candidates = @($firefoxProgIds | Where-Object { $_ -like "$progId-*" })
+        }
         $found = $candidates | Where-Object { Test-Path "Registry::HKEY_CLASSES_ROOT\$_" } | Select-Object -First 1
         if (-not $found) { $skipped++; continue }
 

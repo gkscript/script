@@ -51,8 +51,14 @@
       "C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\Booking.lnk",
       "C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\LastPass.lnk"
     ],
-    "_taskbarPins": "Start-menu shortcut names pinned to the taskbar after the default pins (they stay on the desktop too)",
-    "taskbarPins": ["Google Chrome.lnk", "Firefox.lnk"]
+    "_taskbarPins": "Taskbar pins in this order (full setup replaces Windows' default pins; install only adds the links). app = AppUserModelID (Get-StartApps), link = Start-menu shortcut, uwp = packaged app pinned only if package is installed",
+    "taskbarPins": [
+      { "app": "Microsoft.Windows.Explorer" },
+      { "link": "Google Chrome.lnk" },
+      { "link": "Firefox.lnk" },
+      { "app": "MSEdge" },
+      { "uwp": "Microsoft.Copilot_8wekyb3d8bbwe!App", "package": "Microsoft.Copilot" }
+    ]
   },
   "office": {
     "_comment": "office.ps1 (own menu item). The product must match the customer's licence - Microsoft: 'If you use the wrong product ID, you can't activate Office' (Learn: Product IDs supported by the ODT). oneDrive: the subscription includes OneDrive storage. setupUrl: the current ODT setup.exe, downloaded and signature-checked for each run (also used by the full run's Office removal).",

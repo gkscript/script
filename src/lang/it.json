@@ -32,7 +32,7 @@
   "result.button.openLog": "Apri log",
   "result.button.restart": "Riavvia ora",
   "result.button.close": "Chiudi",
-  "result.note.defaultApps": "Conferma una volta le app predefinite per questo account: Impostazioni > App > App predefinite (browser, PDF).",
+  "result.note.defaultApps": "Confermare una volta le app predefinite per questo account: Impostazioni > App > App predefinite - Firefox come browser, Adobe Acrobat per i PDF.",
   "used.title": "Questo PC è già in uso",
   "used.subtitle": "La configurazione completa rimuove Office, OneDrive e i collegamenti sul desktop e disattiva BitLocker.",
   "used.heading": "Indizi di utilizzo",

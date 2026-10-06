@@ -113,39 +113,59 @@ Function Test-TaskbarPinSupport {
 Function Set-TaskbarPins {
     <#
     .SYNOPSIS
-        Pin apps to the taskbar once, after the Windows default pins
+        Pin apps to the taskbar once, in a fixed order (config "windows.taskbarPins")
     .DESCRIPTION
         "Start Layout" policy with a taskbar layout XML (Microsoft Learn, taskbar/pinned-apps):
-        applies to the current and every later account at its next sign-in. Without
-        PinListPlacement="Replace" the default pins (Edge, Store, File Explorer) stay and these
-        follow them; PinGeneration="1" applies each pin once, so one the user removes stays
-        removed. Policy values from the local StartMenu.admx. The XML must stay in place and
-        must not contain comments.
+        applies to the current and every later account at its next sign-in. -Replace
+        (PinListPlacement="Replace", full setup) drops Windows' default pins (Store, ...) so the
+        list is exactly this order; without it the pins follow the existing ones (install only -
+        the customer's pins stay). PinGeneration="1" applies each pin once, so one the user
+        removes stays removed. Pin kinds: "app" = AppUserModelID of a desktop app (File Explorer
+        Microsoft.Windows.Explorer, Edge MSEdge - from Get-StartApps), "link" = Start-menu
+        shortcut name, "uwp" = packaged app, pinned only if "package" is installed (Copilot).
+        Policy values from the local StartMenu.admx. The XML must stay in place and must not
+        contain comments.
     #>
     param(
         [Parameter(Mandatory)][string]$OutputFolder,
-        [string[]]$LinkNames = @()
+        [object[]]$Pins = @(),
+        [switch]$Replace
     )
     $programs = Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs'
-    $links = @(foreach ($linkName in $LinkNames) {
-        Get-ChildItem -LiteralPath $programs -Filter $linkName -Recurse -File -ErrorAction SilentlyContinue |
-            Select-Object -First 1 -ExpandProperty FullName
-    })
-    if ($links.Count -eq 0) {
-        Write-Log "Taskbar pins: none of $($LinkNames -join ', ') found in the Start menu - skipped"
+    $elements = New-Object System.Collections.Generic.List[string]
+    $names = New-Object System.Collections.Generic.List[string]
+    foreach ($pin in $Pins) {
+        if ($pin.link) {
+            $path = Get-ChildItem -LiteralPath $programs -Filter $pin.link -Recurse -File -ErrorAction SilentlyContinue |
+                Select-Object -First 1 -ExpandProperty FullName
+            if (-not $path) { Write-Log "  Taskbar: $($pin.link) not in the Start menu - skipped"; continue }
+            $elements.Add("        <taskbar:DesktopApp DesktopApplicationLinkPath=`"$([System.Security.SecurityElement]::Escape($path))`" PinGeneration=`"1`"/>")
+            $names.Add($pin.link)
+        } elseif ($pin.app) {
+            $elements.Add("        <taskbar:DesktopApp DesktopApplicationID=`"$([System.Security.SecurityElement]::Escape($pin.app))`" PinGeneration=`"1`"/>")
+            $names.Add($pin.app)
+        } elseif ($pin.uwp) {
+            if ($pin.package) {
+                $package = try { Get-AppxPackage -AllUsers -Name $pin.package -ErrorAction Stop } catch { Get-AppxPackage -Name $pin.package -ErrorAction SilentlyContinue }
+                if (-not $package) { Write-Log "  Taskbar: $($pin.package) not installed - skipped"; continue }
+            }
+            $elements.Add("        <taskbar:UWA AppUserModelID=`"$([System.Security.SecurityElement]::Escape($pin.uwp))`" PinGeneration=`"1`"/>")
+            $names.Add($pin.uwp)
+        }
+    }
+    if ($elements.Count -eq 0) {
+        Write-Log "Taskbar pins: nothing to pin - skipped"
         return
     }
     try {
-        $pins = @($links | ForEach-Object {
-            "        <taskbar:DesktopApp DesktopApplicationLinkPath=`"$([System.Security.SecurityElement]::Escape($_))`" PinGeneration=`"1`"/>"
-        })
+        $placement = if ($Replace) { ' PinListPlacement="Replace"' } else { '' }
         $xml = @(
             '<?xml version="1.0" encoding="utf-8"?>'
             '<LayoutModificationTemplate xmlns="http://schemas.microsoft.com/Start/2014/LayoutModification" xmlns:defaultlayout="http://schemas.microsoft.com/Start/2014/FullDefaultLayout" xmlns:start="http://schemas.microsoft.com/Start/2014/StartLayout" xmlns:taskbar="http://schemas.microsoft.com/Start/2014/TaskbarLayout" Version="1">'
-            '  <CustomTaskbarLayoutCollection>'
+            "  <CustomTaskbarLayoutCollection$placement>"
             '    <defaultlayout:TaskbarLayout>'
             '      <taskbar:TaskbarPinList>'
-        ) + $pins + @(
+        ) + $elements + @(
             '      </taskbar:TaskbarPinList>'
             '    </defaultlayout:TaskbarLayout>'
             '  </CustomTaskbarLayoutCollection>'
@@ -157,7 +177,8 @@ Function Set-TaskbarPins {
         if (-not (Test-Path $key)) { $null = New-Item -Path $key -Force }
         Set-ItemProperty -Path $key -Name 'LockedStartLayout' -Value 1 -Type DWord -Force
         Set-ItemProperty -Path $key -Name 'StartLayoutFile' -Value $xmlPath -Type ExpandString -Force
-        Write-Log "Taskbar pins configured ($(($links | ForEach-Object { Split-Path $_ -Leaf }) -join ', '); once per account at its next sign-in)" -Level Success
+        $mode = if ($Replace) { 'replacing the default pins' } else { 'after the existing pins' }
+        Write-Log "Taskbar pins configured ($($names -join ', '); $mode; once per account at its next sign-in)" -Level Success
     }
     catch {
         Write-Log "Taskbar pins could not be configured: $_" -Level Warning -Key warn.taskbarPins -KeyArgs "$_"

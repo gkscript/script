@@ -32,7 +32,7 @@
   "result.button.openLog": "Open log",
   "result.button.restart": "Restart now",
   "result.button.close": "Close",
-  "result.note.defaultApps": "Confirm the default apps for this account once: Settings > Apps > Default apps (browser, PDF).",
+  "result.note.defaultApps": "Confirm the default apps for this account once: Settings > Apps > Default apps - Firefox as the browser, Adobe Acrobat for PDF.",
   "used.title": "This PC is already in use",
   "used.subtitle": "The full setup removes Office, OneDrive and desktop shortcuts and turns off BitLocker.",
   "used.heading": "Signs of use",

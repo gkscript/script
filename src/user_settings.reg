@@ -72,3 +72,16 @@ Windows Registry Editor Version 5.00
 [HKEY_CURRENT_USER\Console\%%Startup]
 "DelegationConsole"="{2EACA947-7F5F-4CFA-BA87-8F7FBEEFBE69}"
 "DelegationTerminal"="{E12CFF52-A866-4C77-9A90-F570A7AA2C6B}"
+
+; Taskbar: search as an icon only (SearchboxTaskbarMode 0 hidden, 1 icon, 2 box, 3 icon and label)
+[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Search]
+"SearchboxTaskbarMode"=dword:00000001
+
+; Taskbar: Task View button shown
+[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced]
+"ShowTaskViewButton"=dword:00000001
+
+; Adobe Acrobat / Reader 64-bit (registry name "Adobe Acrobat"): classic view, the value the
+; menu item "Disable new Acrobat" writes (Adobe ETK: bEnableAV2); the user can switch back
+[HKEY_CURRENT_USER\Software\Adobe\Adobe Acrobat\DC\AVGeneral]
+"bEnableAV2"=dword:00000000

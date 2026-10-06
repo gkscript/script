@@ -32,7 +32,7 @@
   "result.button.openLog": "Log öffnen",
   "result.button.restart": "Jetzt neu starten",
   "result.button.close": "Schließen",
-  "result.note.defaultApps": "Standard-Apps für dieses Konto einmal bestätigen: Einstellungen > Apps > Standard-Apps (Browser, PDF).",
+  "result.note.defaultApps": "Standard-Apps für dieses Konto einmal bestätigen: Einstellungen > Apps > Standard-Apps - Firefox als Browser, Adobe Acrobat für PDF.",
   "used.title": "Dieser PC wird bereits benutzt",
   "used.subtitle": "Die vollständige Einrichtung entfernt Office, OneDrive und Desktop-Verknüpfungen und schaltet BitLocker aus.",
   "used.heading": "Anzeichen",

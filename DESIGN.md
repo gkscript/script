@@ -167,7 +167,7 @@ A disciplined palette: one brand blue in two strengths, three status signals, an
 
 ### Hierarchy
 - **Display** (600, 32px): the band headline, one per window ("Netixx Grundkonfiguration", "Setup complete", "Finished with 3 warnings").
-- **Subline** (400, 14px): the single line under the headline (profile, machine, duration; or "Choose a setup profile · v2.2.3").
+- **Subline** (400, 14px): the single line under the headline (profile, machine, duration; or "Choose a setup profile · v2.2.4").
 - **Title** (600, 15px): the profile name in a profile row.
 - **Heading** (600, 14px): the one section heading below the band ("Needs attention", "What went wrong").
 - **Body** (400, 13px, 19px line height): list items, button labels, the restart line.

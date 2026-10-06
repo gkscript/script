@@ -58,7 +58,7 @@ All profiles include: all Windows updates (switchable in the menu), Office 365 u
 8. Set up `C:\Install` (locked down), download the Netixx Helpdesk (signature-checked)
 9. Uninstall Office 365 (Office Deployment Tool → winget → silent registry fallback)
 10. Remove UWP bloat (Win11Debloat's default selection, OEM promo apps, Samsung Galaxy ecosystem apps; OEM update/hotkey/battery tools are kept) and Win32 promo software; uninstall OneDrive (also kept from installing in accounts created later); then update installed apps with winget
-11. Prepare accounts created later (the customer's): Default profile settings, default apps via DISM; clean Start pins and Chrome/Firefox on the taskbar after the default pins (both applied once, instead of desktop icons); daily Bing wallpaper (4K) for every account
+11. Prepare accounts created later (the customer's): Default profile settings, default apps via DISM; clean Start pins and a fixed taskbar (File Explorer, Chrome, Firefox, Edge, Copilot if present; install only adds Chrome/Firefox after the existing pins; both applied once); Firefox as default browser; daily Bing wallpaper (4K) for every account
 12. Health checks: activation, Defender, edition vs. profile
 13. Clean up: update leftovers (DISM), Chocolatey, temp files, recycle bin; setup files removed at the next start; restore point
 14. Restart Explorer, so the new settings show without signing out
@@ -156,7 +156,7 @@ src/
 - **Packages**: edit `src/config.json` — `packages` per profile; winget/Chocolatey IDs in `packageCatalog`
 - **Bloat exclusions / OEM keep-list**: edit `$excluded` in `src/debloat.ps1`; extra removals in `$oemAndExtras` / `$win32Bloat`
 - **Desktop icons to keep**: edit `src/whitelist.txt`
-- **Taskbar pins**: `windows.taskbarPins` in `src/config.json` (Start-menu shortcut names)
+- **Taskbar pins**: `windows.taskbarPins` in `src/config.json`, in order (`app` = AppUserModelID, `link` = Start-menu shortcut, `uwp` + `package` = Store app pinned only if installed)
 - **Maker BIOS/firmware tool** (Dell, HP business): `"oemFirmware": true` per profile in `src/config.json` (default: business only)
 - **Office products**: `office` in `src/config.json` — product IDs, OneDrive per product, excluded apps, proofing languages
 - **OEM branding**: edit `src/Logo_Info.reg` (Windows 11 shows the support texts; it no longer displays an OEM logo)
@@ -165,6 +165,11 @@ src/
 - **Texts / translations**: edit `src/lang/de.json`, `en.json`, `it.json` (same keys in all three)
 
 ## Changelog
+
+### v2.2.4 — 2026-10-06
+- Taskbar: search as an icon only, Task View button, pins in a fixed order (File Explorer, Chrome, Firefox, Edge, Copilot if installed) instead of the Windows defaults; install only still just adds Chrome and Firefox
+- Firefox is the default browser for accounts created later; the result window reminds the technician to set it for the current account
+- Adobe Acrobat Reader opens in the classic view (it can still be switched in its menu)
 
 ### v2.2.3 — 2026-10-06
 - Desktop layout: the Netixx Helpdesk sits in the top-right corner and the Recycle Bin in the bottom-right corner on every screen resolution (they were only exact on the reference PC's)

@@ -414,7 +414,12 @@ try {
         $script:ResultNotes = @(Get-UiText result.note.defaultApps)
     }
     if ($taskbarPinsOk) {
-        Set-TaskbarPins -OutputFolder $installFolder -LinkNames $taskbarApps
+        if ($InstallOnly) {
+            # The customer's taskbar: only add the browsers after what is there
+            Set-TaskbarPins -OutputFolder $installFolder -Pins @($taskbarApps | Where-Object { $_.link })
+        } else {
+            Set-TaskbarPins -OutputFolder $installFolder -Pins $taskbarApps -Replace
+        }
     } else {
         Write-Log "Taskbar pins need Windows 11 24H2 build 26100.4484 or later - skipped"
     }
