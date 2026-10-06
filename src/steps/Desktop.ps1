@@ -248,7 +248,8 @@ Function Register-BingWallpaper {
     param([Parameter(Mandatory)][string]$InstallFolder)
     $target = Join-Path $InstallFolder 'BingWallpaper.ps1'
     try {
-        Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'BingWallpaper.ps1') -Destination $target -Force
+        # This file is in src\steps; the wallpaper script sits in src
+        Copy-Item -LiteralPath (Join-Path (Split-Path $PSScriptRoot -Parent) 'BingWallpaper.ps1') -Destination $target -Force
         $usersGroup = ([System.Security.Principal.SecurityIdentifier]'S-1-5-32-545').Translate([System.Security.Principal.NTAccount]).Value
         $action = New-ScheduledTaskAction -Execute "$env:SystemRoot\System32\conhost.exe" `
             -Argument "--headless powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$target`""
@@ -274,9 +275,31 @@ Function Restart-Explorer {
         Windows restarts the shell by itself (AutoRestartShell) as the signed-in user. If it
         isn't back within 15 s, it is started as that user through a short-lived scheduled
         task - an Explorer started from this elevated session would be rejected as the shell.
+    .PARAMETER LayoutFile
+        Desktop icon layout (.reg export of HKCU\Software\Microsoft\Windows\Shell\Bags\1\Desktop)
+        to write while Explorer is down - a running Explorer overwrites IconLayouts when it
+        exits. Only for that moment AutoRestartShell is 0 (restored in finally); unlike the old
+        blanked Winlogon Shell value, a value left behind could not cost anyone the desktop.
     #>
+    param([string]$LayoutFile)
     try {
-        Stop-ProcessWithTimeout -Name 'explorer' -TimeoutSeconds 10
+        $winlogon = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon'
+        if ($LayoutFile -and (Test-Path -LiteralPath $LayoutFile)) {
+            $autoRestart = (Get-ItemProperty -Path $winlogon -Name AutoRestartShell -ErrorAction SilentlyContinue).AutoRestartShell
+            try {
+                Set-ItemProperty -Path $winlogon -Name AutoRestartShell -Value 0 -Type DWord -Force
+                Stop-ProcessWithTimeout -Name 'explorer' -TimeoutSeconds 15
+                $null = Invoke-NativeCommand "$env:SystemRoot\System32\reg.exe" @('import', $LayoutFile)
+                if ($LASTEXITCODE -eq 0) { Write-Log "Desktop icon layout applied ($(Split-Path $LayoutFile -Leaf))" -Level Success }
+                else { Write-Log "Desktop icon layout import returned $LASTEXITCODE" -Level Warning -Key warn.regImport -KeyArgs (Split-Path $LayoutFile -Leaf), $LASTEXITCODE }
+            }
+            finally {
+                $restore = if ($null -ne $autoRestart) { $autoRestart } else { 1 }
+                Set-ItemProperty -Path $winlogon -Name AutoRestartShell -Value $restore -Type DWord -Force
+            }
+        } else {
+            Stop-ProcessWithTimeout -Name 'explorer' -TimeoutSeconds 10
+        }
         for ($i = 0; $i -lt 15 -and -not (Get-Process explorer -ErrorAction SilentlyContinue); $i++) { Start-Sleep -Seconds 1 }
         if (Get-Process explorer -ErrorAction SilentlyContinue) {
             Write-Log "Explorer restarted" -Level Success
@@ -301,4 +324,47 @@ Function Restart-Explorer {
     catch {
         Write-Log "Explorer restart failed: $_" -Level Warning -Key warn.explorer -KeyArgs "$_"
     }
+}
+
+Function Add-DesktopShortcuts {
+    <#
+    .SYNOPSIS
+        Copy Start-menu shortcuts to the Public Desktop (config "desktopShortcuts")
+    .DESCRIPTION
+        The fixed desktop layouts show icons no installer puts there: LibreOffice Writer, Calc and
+        Impress (its installer adds only a Start Center icon) and Word, Excel, PowerPoint (Office
+        adds none). A shortcut that isn't in the Start menu is skipped.
+    #>
+    param([string[]]$Names = @())
+    $programs = Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs'
+    $desktop = [Environment]::GetFolderPath('CommonDesktopDirectory')
+    foreach ($name in $Names) {
+        $source = Get-ChildItem -LiteralPath $programs -Filter $name -Recurse -File -ErrorAction SilentlyContinue |
+            Select-Object -First 1 -ExpandProperty FullName
+        if (-not $source) { Write-Log "  Desktop shortcut: $name not in the Start menu - skipped"; continue }
+        Copy-Item -LiteralPath $source -Destination (Join-Path $desktop $name) -Force
+        Write-Log "  Desktop shortcut: $name"
+    }
+}
+
+Function Test-DesktopIsOurs {
+    <#
+    .SYNOPSIS
+        True while the desktop holds only what this tool puts there (whitelisted shortcuts)
+    .DESCRIPTION
+        office.ps1 runs on its own, also on a PC in use: a fixed layout may only replace an icon
+        arrangement this tool made, never one the customer set up. Any other shortcut, or any
+        file on the user's desktop, means the desktop is the customer's.
+    #>
+    param([Parameter(Mandatory)][string]$WhitelistPath)
+    $whitelist = @(Get-Content $WhitelistPath | Where-Object { $_.Trim() } | ForEach-Object { $_.Trim() })
+    $folders = @([Environment]::GetFolderPath('CommonDesktopDirectory'), [Environment]::GetFolderPath('Desktop'))
+    foreach ($folder in $folders) {
+        if (-not $folder -or -not (Test-Path -LiteralPath $folder)) { continue }
+        foreach ($item in Get-ChildItem -LiteralPath $folder -Force -ErrorAction SilentlyContinue) {
+            if ($item.Name -ieq 'desktop.ini') { continue }
+            if (-not ($whitelist | Where-Object { $item.Name -like $_ })) { return $false }
+        }
+    }
+    return $true
 }

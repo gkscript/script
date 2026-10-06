@@ -166,7 +166,12 @@ src/
 
 ## Changelog
 
-### Unreleased
+### v2.2.2 — 2026-10-06
+- Found in Windows Sandbox tests (`tests/sandbox/Start-SandboxTest.ps1`, new): the daily Bing wallpaper was never set up since v2.2.0 (wrong folder after the split into `src/steps`); the Chocolatey fallback failed where the PowerShell Archive module lacks the display language's resources (language pack on another base image); after a failed Chocolatey install it no longer retries per package (the server answered 429); the disk space check no longer depends on the storage WMI provider
+- Windows Spotlight's "Learn about this picture" desktop icon is hidden
+- Fixed desktop icon layouts again, recorded on a reference PC: business / consumer without LibreOffice, consumer with LibreOffice (Writer, Calc, Impress icons), and after the Office install (Word, Excel, PowerPoint icons) - the Office layout only while the desktop has nothing of the customer's
+- Firefox and Chrome are on the desktop again, in addition to the taskbar
+- Fixed: on a fresh PC the run stopped at the first app ("... must be registered first"): winget existed but App Installer was not registered yet. winget is now tested with a real call, registered if needed (up to 2 minutes), and a winget that cannot start falls back to Chocolatey instead of ending the run
 - MIT license, third-party notices for the menu module and Win11Debloat (shipped in the exe)
 
 ### v2.2.1 — 2026-10-05

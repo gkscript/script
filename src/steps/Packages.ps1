@@ -18,6 +18,19 @@ Function Install-Chocolatey {
             $ProgressPreference = 'SilentlyContinue'
             Invoke-WebRequest -Uri "https://community.chocolatey.org/install.ps1" -OutFile $chocoScriptPath -ErrorAction Stop
             Write-Log "Executing Chocolatey installation script..."
+            # The script unpacks with Expand-Archive. Without the Archive module's resources for the
+            # display language (e.g. a language pack on another base image; Windows Sandbox), its
+            # import only reports a missing ArchiveResources.psd1 - but under 'Stop' that error
+            # makes the module "could not be loaded". The module reads the global preference, so load
+            # it once under a global 'Continue' (verified in Windows Sandbox, de-DE without resources).
+            $savedPreference = $global:ErrorActionPreference
+            try {
+                $global:ErrorActionPreference = 'Continue'
+                Import-Module Microsoft.PowerShell.Archive -ErrorAction SilentlyContinue
+            }
+            finally {
+                $global:ErrorActionPreference = $savedPreference
+            }
             [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
             & $chocoScriptPath
             Remove-Item $chocoScriptPath -Force
@@ -259,6 +272,18 @@ Function Install-ChocolateyPackages {
     }
 }
 
+Function Test-WingetUsable {
+    # True when winget actually runs (prints its version), not just when the alias exists
+    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) { return $false }
+    try {
+        $version = Invoke-NativeCommand winget @('--version')
+        return ($LASTEXITCODE -eq 0 -and "$version" -match 'v?\d+\.\d+')
+    }
+    catch {
+        return $false
+    }
+}
+
 Function Initialize-Winget {
     <#
     .SYNOPSIS
@@ -267,8 +292,10 @@ Function Initialize-Winget {
         Microsoft documents that winget may be unavailable right after the first logon until
         the Store has registered App Installer in the background.
     #>
-    if (Get-Command winget -ErrorAction SilentlyContinue) { return $true }
-    Write-Log "winget not found - registering App Installer..."
+    # The winget.exe alias exists before App Installer is registered for this account; only a real
+    # call tells (on a fresh PC it fails with "... must be registered first")
+    if (Test-WingetUsable) { return $true }
+    Write-Log "winget not usable yet - registering App Installer..."
     try {
         Add-AppxPackage -RegisterByFamilyName -MainPackage Microsoft.DesktopAppInstaller_8wekyb3d8bbwe -ErrorAction Stop
     }
@@ -277,9 +304,13 @@ Function Initialize-Winget {
     }
     $windowsApps = Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps'
     if ($env:Path -notlike "*$windowsApps*") { $env:Path = "$env:Path;$windowsApps" }
-    if (Get-Command winget -ErrorAction SilentlyContinue) {
-        Write-Log "winget is ready" -Level Success
-        return $true
+    # The Store may still be finishing the registration in the background: up to 2 minutes
+    for ($i = 0; $i -lt 12; $i++) {
+        if (Test-WingetUsable) {
+            Write-Log "winget is ready" -Level Success
+            return $true
+        }
+        Start-Sleep -Seconds 10
     }
     Write-Log "winget is not available - winget-based steps will be skipped" -Level Warning -Key warn.wingetMissing
     return $false
@@ -302,53 +333,62 @@ Function Install-WingetPackage {
         # Already installed: update it (a PC in use, new Outlook preinstalled by Windows)
         [switch]$Upgrade
     )
-    $winget = (Get-Command winget -ErrorAction SilentlyContinue).Source
-    if (-not $winget) { return 'failed' }
+    try {
+        $winget = (Get-Command winget -ErrorAction SilentlyContinue).Source
+        if (-not $winget) { return 'failed' }
 
-    $listArgs = @('list', '--id', $Id, '--exact', '--source', $Source, '--accept-source-agreements', '--disable-interactivity')
-    $null = Invoke-NativeCommand winget $listArgs
-    if ($LASTEXITCODE -eq 0) {
-        if (-not $Upgrade) {
-            Write-Log "  Already installed: $Id"
-            return 'installed'
-        }
-        $upgradeArgs = "upgrade --id $Id --exact --source $Source --silent --accept-package-agreements --accept-source-agreements --disable-interactivity"
-        $proc = Start-Process -FilePath $winget -ArgumentList $upgradeArgs -NoNewWindow -PassThru
-        $null = $proc.Handle
-        if (-not $proc.WaitForExit(20 * 60 * 1000)) {
-            $null = Invoke-NativeCommand taskkill @('/T', '/F', '/PID', $proc.Id)
-            Write-Log "  Already installed: $Id (update still running after 20 min - stopped)"
-        } elseif ($proc.ExitCode -eq 0) {
-            Write-Log "  Updated: $Id" -Level Success
-        } else {
-            # 0x8A15002B (-1978335189): no newer version
-            Write-Log "  Already installed: $Id (no update applied, winget exit $($proc.ExitCode))"
-        }
-        return 'installed'
-    }
-
-    $arguments = "install --id $Id --exact --source $Source --silent --accept-package-agreements --accept-source-agreements --disable-interactivity $ExtraArgs".Trim()
-    for ($attempt = 1; $attempt -le 2; $attempt++) {
-        Write-Log "  winget install $Id (attempt $attempt/2)"
-        $proc = Start-Process -FilePath $winget -ArgumentList $arguments -NoNewWindow -PassThru
-        $null = $proc.Handle
-        if (-not $proc.WaitForExit(20 * 60 * 1000)) {
-            $null = Invoke-NativeCommand taskkill @('/T', '/F', '/PID', $proc.Id)
-            Write-Log "    $Id still installing after 20 min - stopped"
-            $null = Wait-MsiIdle -TimeoutSeconds 120
-            continue
-        }
-        # 0x8A150014: no package found for this ID
-        if ($proc.ExitCode -eq -1978335212) { return 'notfound' }
+        $listArgs = @('list', '--id', $Id, '--exact', '--source', $Source, '--accept-source-agreements', '--disable-interactivity')
         $null = Invoke-NativeCommand winget $listArgs
         if ($LASTEXITCODE -eq 0) {
-            Write-Log "    Installed: $Id" -Level Success
+            if (-not $Upgrade) {
+                Write-Log "  Already installed: $Id"
+                return 'installed'
+            }
+            $upgradeArgs = "upgrade --id $Id --exact --source $Source --silent --accept-package-agreements --accept-source-agreements --disable-interactivity"
+            $proc = Start-Process -FilePath $winget -ArgumentList $upgradeArgs -NoNewWindow -PassThru
+            $null = $proc.Handle
+            if (-not $proc.WaitForExit(20 * 60 * 1000)) {
+                $null = Invoke-NativeCommand taskkill @('/T', '/F', '/PID', $proc.Id)
+                Write-Log "  Already installed: $Id (update still running after 20 min - stopped)"
+            } elseif ($proc.ExitCode -eq 0) {
+                Write-Log "  Updated: $Id" -Level Success
+            } else {
+                # 0x8A15002B (-1978335189): no newer version
+                Write-Log "  Already installed: $Id (no update applied, winget exit $($proc.ExitCode))"
+            }
             return 'installed'
         }
-        Write-Log "    winget exit code $($proc.ExitCode) for $Id"
-        Start-Sleep -Seconds 5
+
+        $arguments = "install --id $Id --exact --source $Source --silent --accept-package-agreements --accept-source-agreements --disable-interactivity $ExtraArgs".Trim()
+        for ($attempt = 1; $attempt -le 2; $attempt++) {
+            Write-Log "  winget install $Id (attempt $attempt/2)"
+            $proc = Start-Process -FilePath $winget -ArgumentList $arguments -NoNewWindow -PassThru
+            $null = $proc.Handle
+            if (-not $proc.WaitForExit(20 * 60 * 1000)) {
+                $null = Invoke-NativeCommand taskkill @('/T', '/F', '/PID', $proc.Id)
+                Write-Log "    $Id still installing after 20 min - stopped"
+                $null = Wait-MsiIdle -TimeoutSeconds 120
+                continue
+            }
+            # 0x8A150014: no package found for this ID
+            if ($proc.ExitCode -eq -1978335212) { return 'notfound' }
+            $null = Invoke-NativeCommand winget $listArgs
+            if ($LASTEXITCODE -eq 0) {
+                Write-Log "    Installed: $Id" -Level Success
+                return 'installed'
+            }
+            Write-Log "    winget exit code $($proc.ExitCode) for $Id"
+            Start-Sleep -Seconds 5
+        }
+        return 'failed'
     }
-    return 'failed'
+    catch {
+        # winget that cannot start (e.g. App Installer not registered) must not end the run:
+        # no more winget for this run, the caller falls back to Chocolatey
+        Write-Log "  winget could not run ($_) - falling back to Chocolatey"
+        $script:WingetReady = $false
+        return 'failed'
+    }
 }
 
 Function Install-AppPackages {
@@ -383,10 +423,16 @@ Function Install-AppPackages {
         }
 
         $chocoId = if ($entry -and $entry.choco) { $entry.choco } else { $name }
+        # One failed Chocolatey install is enough: retrying per package only gets the download
+        # rate-limited (HTTP 429) and repeats the same warning
+        if ($script:ChocolateyUnavailable) {
+            Write-Log "'$name' could not be installed (winget and Chocolatey unavailable)" -Level Warning -Key warn.pkgFailed -KeyArgs $name
+            continue
+        }
         Write-Log "  Falling back to Chocolatey for $name ($chocoId)"
         try {
             if (-not (Get-Command choco -ErrorAction SilentlyContinue)) {
-                Install-Chocolatey
+                try { Install-Chocolatey } catch { $script:ChocolateyUnavailable = $true; throw }
             }
             Install-ChocolateyPackages -PackageList @($chocoId) -ChocoParams "$($entry.chocoParams)"
         }
@@ -406,13 +452,19 @@ Function Update-InstalledApps {
         Runs with a timeout so a stuck installer can't hold the unattended run.
     #>
     $winget = Get-Command winget -ErrorAction SilentlyContinue
-    if (-not $winget) {
+    if (-not $winget -or -not (Test-WingetUsable)) {
         Write-Log "winget not available - skipping app updates"
         return
     }
     Write-Log "Updating installed apps with winget..."
     $arguments = 'upgrade --all --silent --source winget --accept-package-agreements --accept-source-agreements --disable-interactivity'
-    $proc = Start-Process -FilePath $winget.Source -ArgumentList $arguments -NoNewWindow -PassThru
+    try {
+        $proc = Start-Process -FilePath $winget.Source -ArgumentList $arguments -NoNewWindow -PassThru
+    }
+    catch {
+        Write-Log "winget could not run ($_) - app updates skipped"
+        return
+    }
     $null = $proc.Handle
     if (-not $proc.WaitForExit(30 * 60 * 1000)) {
         $null = Invoke-NativeCommand taskkill @('/T', '/F', '/PID', $proc.Id)

@@ -1,2 +1,9 @@
 Netixx Helpdesk
-LibreOffice*.lnk
+Firefox.lnk
+Google Chrome.lnk
+LibreOffice Writer.lnk
+LibreOffice Calc.lnk
+LibreOffice Impress.lnk
+Word.lnk
+Excel.lnk
+PowerPoint.lnk

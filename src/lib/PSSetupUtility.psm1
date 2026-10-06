@@ -168,9 +168,9 @@ Function Test-PrerequisiteDiskSpace {
     Write-Log "Checking disk space (required: $('{0:N0}' -f $requiredBytes) bytes)..."
     
     try {
-        $systemDrive = $env:SystemDrive
-        $diskInfo = Get-Volume -DriveLetter ($systemDrive[0]) -ErrorAction Stop
-        $freespace = $diskInfo.SizeRemaining
+        # DriveInfo, not Get-Volume: the storage WMI provider finds no volume for C: in Windows
+        # Sandbox (container file system) and on some virtual disks
+        $freespace = (New-Object System.IO.DriveInfo $env:SystemDrive).AvailableFreeSpace
         
         if ($freespace -lt $requiredBytes) {
             throw "Insufficient disk space. Required: $('{0:N2}' -f ($requiredBytes/1GB))GB, Available: $('{0:N2}' -f ($freespace/1GB))GB"

@@ -117,7 +117,7 @@ catch {
         'admin'    { Get-UiText preflight.admin }
         'internet' { Get-UiText preflight.internet }
         'disk'     {
-            $freeGb = try { '{0:N1}' -f ((Get-Volume -DriveLetter $env:SystemDrive[0]).SizeRemaining / 1GB) } catch { '?' }
+            $freeGb = try { '{0:N1}' -f ((New-Object System.IO.DriveInfo $env:SystemDrive).AvailableFreeSpace / 1GB) } catch { '?' }
             Get-UiText preflight.disk @($freeGb, ('{0:N0}' -f ($script:config.validation.minDiskSpace / 1GB)))
         }
         default    { Get-UiText preflight.other "$_" }
@@ -263,11 +263,12 @@ try {
     if (-not $InstallOnly) { Set-NotebookPower }
     Enable-WindowsSudo
 
-    # Chrome and Firefox go to the taskbar (Step 11) instead of the desktop - if this Windows
-    # can pin them; otherwise their desktop shortcuts stay
+    # Chrome and Firefox: on the desktop (whitelist) and pinned to the taskbar (Step 11)
     $taskbarApps = @($script:config.windows.taskbarPins)
     $taskbarPinsOk = Test-TaskbarPinSupport
-    $keepOnDesktop = if ($taskbarPinsOk) { @() } else { $taskbarApps }
+
+    # Icons the profile's desktop layout shows but no installer creates (e.g. LibreOffice Writer)
+    if ($deploymentConfig.desktopShortcuts) { Add-DesktopShortcuts -Names @($deploymentConfig.desktopShortcuts) }
 
     # Step 5: Remove bloatware shortcuts. Install only: just the shortcuts this run's installers
     # added to the desktop (not whitelisted); everything the customer had stays
@@ -275,11 +276,11 @@ try {
         $script:CurrentStep = 'bloat'
         if ($InstallOnly) {
             Write-Log "Step 5: Removing desktop shortcuts added by the installers (50%)"
-            Clear-DesktopIcons -WhitelistPath "$PSScriptRoot\whitelist.txt" -Keep $desktopBefore -ExtraWhitelist $keepOnDesktop
+            Clear-DesktopIcons -WhitelistPath "$PSScriptRoot\whitelist.txt" -Keep $desktopBefore
         } else {
             Write-Log "Step 5: Removing bloatware (50%)"
             Remove-BloatwareShortcuts -ShortcutPaths $script:config.windows.shortcuts
-            Clear-DesktopIcons -WhitelistPath "$PSScriptRoot\whitelist.txt" -ExtraWhitelist $keepOnDesktop
+            Clear-DesktopIcons -WhitelistPath "$PSScriptRoot\whitelist.txt"
         }
     }
 
@@ -415,7 +416,7 @@ try {
     if ($taskbarPinsOk) {
         Set-TaskbarPins -OutputFolder $installFolder -LinkNames $taskbarApps
     } else {
-        Write-Log "Taskbar pins need Windows 11 24H2 build 26100.4484 or later - skipped; $($taskbarApps -join ', ') stay on the desktop"
+        Write-Log "Taskbar pins need Windows 11 24H2 build 26100.4484 or later - skipped"
     }
     Register-BingWallpaper -InstallFolder $installFolder
 
@@ -440,7 +441,9 @@ try {
     if (-not $InstallOnly) {
         Write-Log "Finalizing: restarting Explorer (98%)"
         $script:CurrentStep = 'finalize'
-        Restart-Explorer
+        # Fixed desktop icon layout per profile (config "desktopLayout"), recorded on a reference PC
+        $layoutFile = if ($deploymentConfig.desktopLayout) { Join-Path $PSScriptRoot $deploymentConfig.desktopLayout } else { $null }
+        Restart-Explorer -LayoutFile $layoutFile
     }
 
     # Any pending restart (updates, removed antivirus, servicing) is offered in the result window

@@ -16,6 +16,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 Import-Module "$PSScriptRoot\lib\PSSetupUtility.psm1" -Force
+. (Join-Path $PSScriptRoot 'steps\Desktop.ps1')
 
 # Started from the exe's 32-bit stub (or any 32-bit process): run again in 64-bit PowerShell
 $relaunchExit = Restart-In64BitPowerShell -ScriptPath $PSCommandPath -BoundParameters $PSBoundParameters
@@ -128,6 +129,16 @@ try {
         throw "$($selected.productId) is not installed after setup (exit code $($proc.ExitCode))"
     }
     Write-Log "$($selected.productId) installed" -Level Success
+
+    # Word, Excel, PowerPoint on the desktop; the "with Office" layout only while the desktop is
+    # still the one this tool set up (checked first - the new icons would not count as ours yet)
+    $desktopIsOurs = Test-DesktopIsOurs -WhitelistPath (Join-Path $PSScriptRoot 'whitelist.txt')
+    Add-DesktopShortcuts -Names @($config.office.desktopShortcuts)
+    if ($desktopIsOurs -and $config.office.desktopLayout) {
+        Restart-Explorer -LayoutFile (Join-Path $PSScriptRoot $config.office.desktopLayout)
+    } else {
+        Write-Log "The desktop has the customer's own icons or files - layout left as it is"
+    }
     Remove-Item -LiteralPath $workFolder -Recurse -Force -ErrorAction SilentlyContinue
 
     # Activation is the customer's sign-in: subscription account, or the account the key was redeemed to

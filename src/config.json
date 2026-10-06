@@ -7,17 +7,21 @@
       "name": "Business",
       "packages": ["vlc", "firefox", "googlechrome", "7zip", "adobereader", "powertoys"],
       "branded": true,
-      "oemFirmware": true
+      "oemFirmware": true,
+      "desktopLayout": "desktop_business.reg"
     },
     "consumer": {
       "name": "Consumer",
       "packages": ["vlc", "firefox", "googlechrome", "7zip", "adobereader", "libreoffice", "paint.net", "outlook", "powertoys"],
-      "branded": true
+      "branded": true,
+      "desktopLayout": "desktop_consumer.reg",
+      "desktopShortcuts": ["LibreOffice Writer.lnk", "LibreOffice Calc.lnk", "LibreOffice Impress.lnk"]
     },
     "consumer-nolo": {
       "name": "Consumer (No LibreOffice)",
       "packages": ["vlc", "firefox", "googlechrome", "7zip", "adobereader", "paint.net", "outlook", "powertoys"],
-      "branded": true
+      "branded": true,
+      "desktopLayout": "desktop_business.reg"
     }
   },
   "packageCatalog": {
@@ -47,7 +51,7 @@
       "C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\Booking.lnk",
       "C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\LastPass.lnk"
     ],
-    "_taskbarPins": "Start-menu shortcut names pinned to the taskbar after the default pins (and kept off the desktop)",
+    "_taskbarPins": "Start-menu shortcut names pinned to the taskbar after the default pins (they stay on the desktop too)",
     "taskbarPins": ["Google Chrome.lnk", "Firefox.lnk"]
   },
   "office": {
@@ -60,7 +64,9 @@
       { "key": "m365home",         "productId": "O365HomePremRetail",     "oneDrive": true }
     ],
     "excludeApps": ["Groove", "Lync", "Publisher"],
-    "proofingLanguages": ["de-de", "it-it"]
+    "proofingLanguages": ["de-de", "it-it"],
+    "desktopShortcuts": ["Word.lnk", "Excel.lnk", "PowerPoint.lnk"],
+    "desktopLayout": "desktop_office.reg"
   },
   "release": {
     "_comment": "The menu compares src/version.txt with the latest GitHub release and links the download.",

@@ -8,6 +8,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 License: MIT (`LICENSE`, Netixx GmbH / Srl); the Netixx brand assets are excluded (README). Code taken from other projects needs its notice in `src/THIRD-PARTY-NOTICES.txt` - that file ships inside the exe.
 
+`tests/sandbox/Start-SandboxTest.ps1 -DeploymentType business [-InstallOnly] [-WithUpdates]` runs a profile end to end in Windows Sandbox (fresh Windows each time; repo mapped read-only; logs, the report and a desktop screenshot every 20 s land in an output folder on the host). It starts `main.ps1` from a 32-bit PowerShell like the exe. The sandbox has no Store/App Installer (winget unusable - the Chocolatey path runs), no Windows Update, no restarts, no BitLocker or OEM hardware, the host's edition, and de-DE without some PowerShell module resources. Only one sandbox runs at a time; `wsb list` / `wsb stop --id` (Store version) manage it.
+
 `tests/Test-Repository.ps1` runs the static checks that caught real bugs: every script parses in Windows PowerShell 5.1, no non-ASCII inside strings, no BOM, XAML well-formed, the three language files have the same keys and every key the code uses exists, config/gui.csv consistent, .reg files UTF-16 LE or ASCII. GitHub Actions (`.github/workflows/ci.yml`) runs it on every push in Windows PowerShell 5.1 and builds a test exe (artifact). Behaviour itself can only be verified by running on a real or VM Windows machine as admin, then checking the log.
 
 ## Build
@@ -121,7 +123,7 @@ The step numbers below match the `Write-Log "Step N"` messages in the code.
   - `machine_settings.reg` (HKLM) covers the Widgets policy, Recall/Click to Do, Edge ads/first-run, the Storage Sense policy (weekly; temp files; recycle bin 30 days; Downloads never), and Fast Startup off.
   - Values come from Win11Debloat's Regfiles and the local ADMX files. Both files are ASCII.
   - Then: Defender PUA blocking on; `Set-NotebookPower` (battery present only: on AC no sleep, display off after 30 min, lid = nothing); `Enable-WindowsSudo` (`sudo config --enable forceNewWindow`; explicit mode, because `--enable enable` means inline).
-- **5. Shortcuts and desktop.** Shortcuts from `config.windows.shortcuts` are deleted. Chrome and Firefox are not on the whitelist: they go to the taskbar (Step 11). If `Test-TaskbarPinSupport` says this Windows can't pin them (below 24H2 build 26100.4484 and `-SkipUpdates`), `config.windows.taskbarPins` are kept on the desktop instead.
+- **5. Shortcuts and desktop.** Shortcuts from `config.windows.shortcuts` are deleted. First `Add-DesktopShortcuts` copies the profile's `desktopShortcuts` from the Start menu to the Public Desktop (consumer: LibreOffice Writer, Calc, Impress - its installer only adds a Start Center icon, which the whitelist drops). Chrome and Firefox stay on the desktop and are also pinned to the taskbar (Step 11).
   - `Clear-DesktopIcons` removes only `.lnk`/`.url` files that aren't in `whitelist.txt` (wildcards allowed), never recursively.
   - It cleans the Public Desktop, and the user's desktop **only while it is the local folder**. A OneDrive-redirected desktop holds the customer's synced files.
 - **6. BitLocker.** Disabled on C: if encrypted. This is a deliberate Netixx decision. The full run also sets `HKLM\SYSTEM\CurrentControlSet\Control\BitLocker\PreventDeviceEncryption=1` (Microsoft Learn, BitLocker for OEMs), because Windows 11 24H2+ turns device encryption on by itself on more PCs, e.g. once a Microsoft account signs in; turning BitLocker on by hand stays possible. Install only touches neither.
@@ -179,7 +181,8 @@ Most steps catch their own errors and log a Warning so the run can continue. Onl
 
 At the end of a full run, `Restart-Explorer` ends Explorer so settings written to the registry (taskbar, desktop icons, Start) show without a sign-out. Windows restarts the shell by itself (AutoRestartShell) as the signed-in user; if it isn't back within 15 s, it is started as `Win32_ComputerSystem.UserName` via a short-lived scheduled task (`GKScript-StartExplorer`), because an Explorer started from the elevated session is rejected as the shell. Install only skips it.
 
-There is no desktop icon layout any more: the old `desktop.reg` files were captured on a dev machine and needed the Winlogon `Shell` value blanked while Explorer was dead. Windows arranges the few remaining icons itself.
+**Desktop icon layout.** Each profile names a layout in `config.json` (`desktopLayout`): `desktop_business.reg` (business and consumer-nolo: This PC, user folder, Control Panel, Firefox, Chrome, Netixx Helpdesk, Recycle Bin), `desktop_consumer.reg` (plus LibreOffice Writer/Calc/Impress); `office.ps1` applies `desktop_office.reg` (plus Word/Excel/PowerPoint, which it copies to the desktop) - but only while `Test-DesktopIsOurs` finds nothing on the desktop beyond the whitelist, so a customer's own arrangement is never replaced. LibreOffice and Office are never installed together. The files are `reg export`s of `HKCU\Software\Microsoft\Windows\Shell\Bags\1\Desktop` from a reference PC, taken after a sign-out (Explorer writes `IconLayouts` then); they must stay UTF-16 LE.
+- `Restart-Explorer -LayoutFile` writes the layout while Explorer is down - a running Explorer overwrites `IconLayouts` when it exits. For that moment it sets Winlogon `AutoRestartShell=0` (restored in `finally`) instead of the old blanked `Shell` value, which could have left every user without a desktop; a leftover 0 only means Explorer isn't restarted after a crash. Install only skips it (customer's desktop).
 
 ## Logging
 
@@ -226,6 +229,9 @@ In Windows PowerShell 5.1, `[System.Windows.Forms.MessageBox]` throws "type not 
 $content = Get-Content .\src\file.reg -Raw -Encoding UTF8
 [System.IO.File]::WriteAllText("$PWD\src\file.reg", $content, [System.Text.Encoding]::Unicode)
 ```
+
+### $ErrorActionPreference = 'Stop' and module autoloading
+A module whose import writes a non-terminating error fails to load under `Stop`, and every later call reports "the module could not be loaded". Seen with `Microsoft.PowerShell.Archive` (Expand-Archive, used by the Chocolatey installer) when the display language's `ArchiveResources.psd1` is missing. Modules read the **global** preference, so a function-local `Continue` is not enough: import such a module once with `$global:ErrorActionPreference = 'Continue'` (restored in `finally`), as `Install-Chocolatey` does. Files in `src/steps` must reach files in `src` via `Split-Path $PSScriptRoot -Parent` (the repository check enforces it).
 
 ### $ErrorActionPreference = 'Stop' and native commands
 `main.ps1` sets `$ErrorActionPreference = 'Stop'` globally. When a native exe (e.g. `reg.exe`, `taskkill`, `choco`, `winget`) writes to stderr, `2>&1 | Out-Null` is **not** enough: the merged ErrorRecord can throw before it reaches `Out-Null`. Use `Invoke-NativeCommand` from PSSetupUtility. It returns the merged output as strings, never throws on stderr, and leaves `$LASTEXITCODE` set:
