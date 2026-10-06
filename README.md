@@ -166,6 +166,9 @@ src/
 
 ## Changelog
 
+### v2.2.3 — 2026-10-06
+- Desktop layout: the Netixx Helpdesk sits in the top-right corner and the Recycle Bin in the bottom-right corner on every screen resolution (they were only exact on the reference PC's)
+
 ### v2.2.2 — 2026-10-06
 - Found in Windows Sandbox tests (`tests/sandbox/Start-SandboxTest.ps1`, new): the daily Bing wallpaper was never set up since v2.2.0 (wrong folder after the split into `src/steps`); the Chocolatey fallback failed where the PowerShell Archive module lacks the display language's resources (language pack on another base image); after a failed Chocolatey install it no longer retries per package (the server answered 429); the disk space check no longer depends on the storage WMI provider
 - Windows Spotlight's "Learn about this picture" desktop icon is hidden
